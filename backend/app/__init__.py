@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import Config
-from app.routes import main_routes
+from app.routes import main_routes,auth_routes
 
 
 
@@ -22,8 +22,7 @@ def create_app() -> FastAPI:
     )
 
     #REGISTRO DE RUTAS
-    # app.include_router(tenant_routes.router)
-    # app.include_router(emergencias_routes.router)
     app.include_router(main_routes.router)
+    app.include_router(auth_routes.router,prefix='/api/auth')
 
     return app
