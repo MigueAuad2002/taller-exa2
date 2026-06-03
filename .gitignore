@@ -1,64 +1,53 @@
-# =========================
-# Entornos Virtuales
-# =========================
-.venv/
-venv/
-env/
-ENV/
-
-# =========================
-# Variables de Entorno
-# =========================
-.env
-.env.*
-*.secret
-
-# =========================
-# Caché de Python y FastAPI
-# =========================
-__pycache__/
-*.py[cod]
-*$py.class
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# =========================
-# Logs del Servidor
-# =========================
-*.log
-
-# =========================
-# Bases de datos locales
-# =========================
-# Aunque usarás PostgreSQL con psycopg2, es buena práctica ignorar
-# bases de datos de SQLite locales que a veces se crean para pruebas rápidas
-*.sqlite3
-*.db
-
-# =========================
-# Entornos de Desarrollo (IDEs)
-# =========================
+#GENERAL
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# =========================
-# Archivos del Sistema Operativo
-# =========================
-# Linux
-*~
-.directory
-# Mac
+*.log
 .DS_Store
-# Windows
 Thumbs.db
-ehthumbs.db
+**/.env
+**/.env.*
+.env
 
-# =========================
-# Empaquetado y Distribución
-# =========================
-build/
-dist/
-*.egg-info/
+#PYTHON
+backend/.venv/
+backend/venv/
+backend/env/
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+.pytest_cache/
+.mypy_cache/
+
+#ANGULAR
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/coverage/
+frontend/.nx/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+FLUTTER
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/.pub-cache/
+mobile/.pub/
+mobile/build/
+
+#ANDROID
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/**/*.keystore
+mobile/android/**/*.jks
+mobile/android/app/build/
+
+#IOS
+mobile/ios/Flutter/.last_build_id
+mobile/ios/Flutter/App.framework
+mobile/ios/Flutter/Flutter.framework
+mobile/ios/Flutter/Generated.xcconfig
+mobile/ios/Flutter/ephemeral/
+mobile/ios/Pods/
