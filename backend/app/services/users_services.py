@@ -26,7 +26,7 @@ def registrar_usuario(data: dict):
     )
     
     datos_usuario = (
-        data['nombre_usuario'], 
+        data['nombre_usuario'].upper(), 
         password_hash, 
         'ACTIVO', 
         data['ci'], 
