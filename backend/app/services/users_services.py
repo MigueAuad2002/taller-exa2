@@ -35,8 +35,6 @@ def registrar_usuario(data: dict):
     )
 
     nuevo_id = users_repos.crear_usuario_db(datos_persona, datos_usuario)
-    if not nuevo_id:
-        raise Exception("No se pudo registrar el usuario. Verifique los datos e intente nuevamente.")
 
     return {
         "success": True,
@@ -63,7 +61,6 @@ def actualizar_usuario(nro_usuario: int, data: dict):
     )
     
     cambiar_password = False
-    # Si la contraseña existe y no está vacía
     if data.get('password') and len(data.get('password').strip()) > 0:
         cambiar_password = True
         password_hash = generate_password_hash(data['password'])
@@ -74,7 +71,6 @@ def actualizar_usuario(nro_usuario: int, data: dict):
             data['id_empresa']
         )
     else:
-        # Si no mandaron contraseña, se ignora el campo password
         datos_usuario = (
             data['nombre_usuario'], 
             data['nro_rol'],

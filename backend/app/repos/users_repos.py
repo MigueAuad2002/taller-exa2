@@ -25,29 +25,18 @@ def obtener_todos_los_usuarios():
                     "nro_usuario": r[0], "ci": r[1], "nombre_usuario": r[2], 
                     "estado": r[3], "id_empresa": r[4], "nombre_completo": r[5], 
                     "correo": r[6], "telefono": r[7], "direccion": r[8], 
-                    "nombre_rol": r[9], "nro_rol": r[10] # nro_rol añadido para el frontend
+                    "nombre_rol": r[9], "nro_rol": r[10]
                 })
         return usuarios
     finally:
         db.close_connection()
 
-# --- CREAR USUARIO (Opción A) ---
+# --- CREAR USUARIO ---
 def crear_usuario_db(datos_persona, datos_usuario):
     db = PostgreSQL()
     db.create_connection()
     try:
-        # 1. Primero verificamos si el usuario ya existe para cortar el flujo de inmediato
-        # datos_usuario[3] corresponde al 'ci' y datos_usuario[0] al 'nombre_usuario'
-        query_verificar = f"""
-            SELECT nro_usuario FROM {Config.SCHEMA}.usuario 
-            WHERE ci = %s OR nombre_usuario = %s AND estado = 'ACTIVO';
-        """
-        existe = db.execute_query(query_verificar, (datos_usuario[3], datos_usuario[0]), fetchone=True)
-        if existe:
-            print("ERROR: El CI o el Nombre de Usuario ya se encuentran registrados.")
-            return None # Aquí sí cortará y devolverá None a tu servicio
-
-        # 2. Insertar Persona (Quitamos ON CONFLICT para mantener la integridad real)
+        # Insertar o actualizar los datos personales
         query_persona = f"""
             INSERT INTO {Config.SCHEMA}.persona (ci, nombre_completo, telefono, correo, direccion)
             VALUES (%s, %s, %s, %s, %s)
@@ -59,7 +48,7 @@ def crear_usuario_db(datos_persona, datos_usuario):
         """
         db.execute_query(query_persona, datos_persona)
 
-        # 3. Insertar Usuario
+        # Insertar Usuario (Si el nombre_usuario está duplicado, Postgres lanzará un error aquí)
         query_usuario = f"""
             INSERT INTO {Config.SCHEMA}.usuario (nombre_usuario, password_hash, estado, ci, nro_rol, id_empresa)
             VALUES (%s, %s, %s, %s, %s, %s)
@@ -76,7 +65,6 @@ def actualizar_usuario_db(nro_usuario, ci, datos_persona, datos_usuario, cambiar
     db = PostgreSQL()
     db.create_connection()
     try:
-        # 1. Actualizar Persona 
         query_persona = f"""
             UPDATE {Config.SCHEMA}.persona
             SET nombre_completo = %s, telefono = %s, correo = %s, direccion = %s
@@ -84,7 +72,6 @@ def actualizar_usuario_db(nro_usuario, ci, datos_persona, datos_usuario, cambiar
         """
         db.execute_query(query_persona, datos_persona + (ci,))
 
-        # 2. Actualizar Usuario 
         if cambiar_password:
             query_usuario = f"""
                 UPDATE {Config.SCHEMA}.usuario
@@ -103,7 +90,7 @@ def actualizar_usuario_db(nro_usuario, ci, datos_persona, datos_usuario, cambiar
     finally:
         db.close_connection()
 
-# --- ELIMINAR USUARIO (Baja Lógica) ---
+# --- ELIMINAR USUARIO ---
 def eliminar_usuario_db(nro_usuario: int):
     db = PostgreSQL()
     db.create_connection()

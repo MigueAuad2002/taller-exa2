@@ -20,7 +20,12 @@ def create_user(data: dict = Body(...)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error interno en BD: {str(e)}")
+        # Aquí capturamos la restricción UNIQUE nueva de tu BD
+        error_msg = str(e)
+        if "uk_nombre_usuario" in error_msg:
+            raise HTTPException(status_code=400, detail="El nombre de usuario elegido ya está en uso. Por favor, elija otro.")
+            
+        raise HTTPException(status_code=500, detail=f"Error interno en BD: {error_msg}")
 
 @router.put('/{nro_usuario}')
 def update_user(nro_usuario: int, data: dict = Body(...)):
@@ -32,7 +37,12 @@ def update_user(nro_usuario: int, data: dict = Body(...)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error interno en BD: {str(e)}")
+        # También capturamos si se intenta actualizar a un nombre de usuario que ya existe
+        error_msg = str(e)
+        if "uk_nombre_usuario" in error_msg:
+            raise HTTPException(status_code=400, detail="El nombre de usuario elegido ya está en uso por otra persona.")
+            
+        raise HTTPException(status_code=500, detail=f"Error interno en BD: {error_msg}")
 
 @router.delete('/{nro_usuario}')
 def delete_user(nro_usuario: int):
