@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import Config
-from app.routes import main_routes,auth_routes, users_routes
+from app.routes import main_routes,auth_routes, users_routes,profile_routes
 
 
 
@@ -25,5 +25,6 @@ def create_app() -> FastAPI:
     app.include_router(main_routes.router)
     app.include_router(auth_routes.router,prefix='/api/auth')
     app.include_router(users_routes.router,prefix='/api/usuarios')
+    app.include_router(profile_routes.router,prefix='/api/perfil')
 
     return app
