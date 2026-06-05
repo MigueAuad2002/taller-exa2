@@ -31,12 +31,23 @@
             <span class="text-xs text-blue-200 uppercase tracking-wider">{{ usuarioActual.nombre_rol }}</span>
           </div>
           
-          <button 
-            (click)="cerrarSesion()"
-            class="flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-medium text-white hover:bg-blue-800 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-blue-700 dark:hover:border-slate-600">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-            Salir
-          </button>
+          <div class="flex items-center gap-2 border-l border-transparent md:border-blue-800 md:dark:border-slate-700 md:pl-6 ml-2 md:ml-0">
+            
+            <button 
+              (click)="navegarA('/perfil')"
+              class="flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-medium text-white hover:bg-blue-800 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-blue-700 dark:hover:border-slate-600">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+              <span class="hidden sm:inline">Perfil</span>
+            </button>
+
+            <button 
+              (click)="cerrarSesion()"
+              class="flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-medium text-white hover:bg-blue-800 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-blue-700 dark:hover:border-slate-600">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+              <span class="hidden sm:inline">Salir</span>
+            </button>
+            
+          </div>
         </div>
       </div>
     </div>

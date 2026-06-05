@@ -66,7 +66,8 @@ export class HomeComponent implements OnInit {
       this.usuarioActual = this.authService.obtenerUsuario();
       
       // SI NO ESTA LOGUEADO LO REDIRIGE AL LOGIN
-      if (!this.usuarioActual) {
+      if (!this.usuarioActual || this.authService.tokenExpirado()) 
+        {
         this.cerrarSesion();
         return; 
       }

@@ -1,20 +1,29 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment.development';
 import { AuthService } from '../../../services/auth';
 
-// Interfaz para tipar estrictamente nuestros datos
 export interface Usuario {
   nro_usuario?: number;
   ci: string;
+  nombre_usuario: string;
+  estado: string;
+  id_empresa?: number | null;
   nombre_completo: string;
   correo: string;
   telefono: string;
-  nombre_rol: string;
-  id_empresa: number;
-  password?: string; // Solo se usa al crear o editar
+  direccion: string;
+  nombre_rol?: string; 
+  nro_rol: number;     
+  password?: string;
+}
+
+export interface RespuestaApi {
+  success: boolean;
+  message: string;
+  data: Usuario[];
 }
 
 @Component({
@@ -27,35 +36,53 @@ export class ListaUsuariosComponent implements OnInit {
   
   private http = inject(HttpClient);
   private authService = inject(AuthService);
+  private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone); // <--- INYECTAMOS NGZONE
   private apiUrl = environment.apiUrl;
 
-  // Estados de la tabla
   usuarios: Usuario[] = [];
   cargando: boolean = false;
   mensajeError: string = '';
 
-  // Estados del Modal (Formulario emergente)
   mostrarModal: boolean = false;
   modoEdicion: boolean = false;
   
-  // Objeto en blanco para el formulario
   usuarioForm: Usuario = this.inicializarUsuario();
 
-  // Roles disponibles para el selector
-  rolesDisponibles = ['ADMINISTRADOR', 'GERENTE TALLER', 'MECANICO', 'CLIENTE'];
+  totalUsuarios: number = 0;
+  usuariosActivos: number = 0;
+  usuariosInactivos: number = 0;
+
+  rolesDisponibles = [
+    { id: 1, nombre: 'ADMINISTRADOR' },
+    { id: 2, nombre: 'GERENTE TALLER' },
+    { id: 3, nombre: 'MECANICO' },
+    { id: 4, nombre: 'CLIENTE' }
+  ];
 
   ngOnInit() {
     this.cargarUsuarios();
   }
 
+  actualizarMetricas() {
+    this.totalUsuarios = this.usuarios.length;
+    this.usuariosActivos = this.usuarios.filter(u => u.estado === 'ACTIVO').length;
+    this.usuariosInactivos = this.usuarios.filter(u => u.estado === 'INACTIVO').length;
+  }
+
+  obtenerIniciales(nombre: string): string {
+    if (!nombre) return 'XX';
+    const partes = nombre.trim().split(' ');
+    if (partes.length >= 2) {
+      return (partes[0][0] + partes[1][0]).toUpperCase();
+    }
+    return nombre.substring(0, 2).toUpperCase();
+  }
+
   inicializarUsuario(): Usuario {
     return {
-      ci: '',
-      nombre_completo: '',
-      correo: '',
-      telefono: '',
-      nombre_rol: 'MECANICO', // Valor por defecto
-      id_empresa: 1 // Por ahora estático, luego lo puedes atar al tenant
+      ci: '', nombre_usuario: '', nombre_completo: '', correo: '',
+      telefono: '', direccion: '', estado: 'ACTIVO', nro_rol: 3, id_empresa: 1
     };
   }
 
@@ -65,25 +92,37 @@ export class ListaUsuariosComponent implements OnInit {
     this.cargando = true;
     this.mensajeError = '';
     
-    // Necesitamos pasar el token para que FastAPI nos deje ver la lista
     const headers = { Authorization: `Bearer ${this.authService.obtenerToken()}` };
 
-    this.http.get<Usuario[]>(`${this.apiUrl}/usuarios`, { headers }).subscribe({
-      next: (data) => {
-        this.usuarios = data;
-        this.cargando = false;
+    this.http.get<RespuestaApi>(`${this.apiUrl}/api/usuarios/`, { headers }).subscribe({
+      next: (res) => {
+        // ENVOLVEMOS LA RESPUESTA EN NGZONE PARA FORZAR EL RENDERIZADO
+        this.ngZone.run(() => {
+          if (res.success) {
+            // USAMOS [...] PARA CREAR UNA NUEVA REFERENCIA EN MEMORIA
+            this.usuarios = [...res.data]; 
+            this.actualizarMetricas();
+          } else {
+            this.mensajeError = res.message || 'Error al obtener datos.';
+          }
+          this.cargando = false;
+          this.cdr.detectChanges(); 
+        });
       },
       error: (err) => {
-        this.mensajeError = 'Error al cargar los usuarios. Verifique la conexión.';
-        this.cargando = false;
-        console.error(err);
+        this.ngZone.run(() => {
+          this.mensajeError = 'Error de conexión al cargar los usuarios.';
+          this.cargando = false;
+          this.cdr.detectChanges();
+          console.error(err);
+        });
       }
     });
   }
 
   guardarUsuario() {
-    if (!this.usuarioForm.ci || !this.usuarioForm.nombre_completo || !this.usuarioForm.correo) {
-      alert('Por favor complete los campos obligatorios (CI, Nombre y Correo).');
+    if (!this.usuarioForm.ci || !this.usuarioForm.nombre_completo || !this.usuarioForm.nombre_usuario) {
+      alert('Por favor complete los campos obligatorios.');
       return;
     }
 
@@ -91,33 +130,41 @@ export class ListaUsuariosComponent implements OnInit {
     this.cargando = true;
 
     if (this.modoEdicion) {
-      // ACTUALIZAR (PUT)
-      this.http.put(`${this.apiUrl}/usuarios/${this.usuarioForm.nro_usuario}`, this.usuarioForm, { headers }).subscribe({
+      this.http.put(`${this.apiUrl}/api/usuarios/${this.usuarioForm.nro_usuario}`, this.usuarioForm, { headers }).subscribe({
         next: () => {
-          this.cerrarModal();
-          this.cargarUsuarios(); // Recargar tabla
+          this.ngZone.run(() => {
+            this.cerrarModal();
+            this.cargarUsuarios();
+          });
         },
-        error: (err) => {
-          alert('Error al actualizar el usuario.');
-          this.cargando = false;
+        error: () => {
+          this.ngZone.run(() => {
+            alert('Error al actualizar el usuario en el servidor.');
+            this.cargando = false;
+            this.cdr.detectChanges();
+          });
         }
       });
     } else {
-      // CREAR (POST)
       if (!this.usuarioForm.password) {
         alert('La contraseña es obligatoria para usuarios nuevos.');
         this.cargando = false;
         return;
       }
 
-      this.http.post(`${this.apiUrl}/usuarios`, this.usuarioForm, { headers }).subscribe({
+      this.http.post(`${this.apiUrl}/api/usuarios/`, this.usuarioForm, { headers }).subscribe({
         next: () => {
-          this.cerrarModal();
-          this.cargarUsuarios();
+          this.ngZone.run(() => {
+            this.cerrarModal();
+            this.cargarUsuarios();
+          });
         },
-        error: (err) => {
-          alert('Error al crear el usuario.');
-          this.cargando = false;
+        error: () => {
+          this.ngZone.run(() => {
+            alert('Error al crear el usuario. Verifique los datos.');
+            this.cargando = false;
+            this.cdr.detectChanges();
+          });
         }
       });
     }
@@ -126,11 +173,15 @@ export class ListaUsuariosComponent implements OnInit {
   eliminarUsuario(id?: number) {
     if (!id) return;
     
-    if (confirm('¿Está seguro que desea dar de baja a este usuario? Esta acción es irreversible.')) {
+    if (confirm('¿Está seguro que desea eliminar a este usuario?')) {
       const headers = { Authorization: `Bearer ${this.authService.obtenerToken()}` };
       
-      this.http.delete(`${this.apiUrl}/usuarios/${id}`, { headers }).subscribe({
-        next: () => this.cargarUsuarios(),
+      this.http.delete(`${this.apiUrl}/api/usuarios/${id}`, { headers }).subscribe({
+        next: () => {
+          this.ngZone.run(() => {
+            this.cargarUsuarios();
+          });
+        },
         error: () => alert('Error al eliminar el usuario.')
       });
     }
@@ -146,7 +197,6 @@ export class ListaUsuariosComponent implements OnInit {
 
   abrirModalEditar(usuario: Usuario) {
     this.modoEdicion = true;
-    // Hacemos una copia del usuario para no editar la tabla en tiempo real hasta guardar
     this.usuarioForm = { ...usuario, password: '' }; 
     this.mostrarModal = true;
   }
