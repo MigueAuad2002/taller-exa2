@@ -1,6 +1,8 @@
 import jwt
 from datetime import datetime,timedelta,timezone
 from app.config import Config
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 def create_access_token(nro_usuario, username, nombre_rol, id_empresa, nombre_completo, minutes=120):
     """
@@ -44,3 +46,23 @@ def decode_access_token(token: str):
             'success': False,
             'message': 'Token de acceso inválido o corrupto.'
         }
+
+
+
+# Inicializamos el manejador Bearer de FastAPI
+bearer_scheme = HTTPBearer()
+
+def verificar_token(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
+    """
+    Dependencia reusable que extrae el token Bearer, lo valida con tu función 
+    y retorna el payload decodificado si todo está correcto.
+    """
+    token = credentials.credentials
+    resultado = decode_access_token(token)
+    
+    # Evaluamos las llaves exactas que tiene tu función decode_access_token
+    if not resultado.get('success'):
+        raise HTTPException(status_code=401, detail=resultado.get('message'))
+        
+    # Si es válido, retornamos el payload de tu JWT (id_empresa, nombre_rol, etc.)
+    return resultado.get('payload')
