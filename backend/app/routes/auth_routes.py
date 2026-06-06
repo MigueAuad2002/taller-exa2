@@ -15,7 +15,6 @@ def login(data: dict = Body(...)):
     try:
         result = auth_services.loguear_usuario(data)
         
-        
         return result
         
     except ValueError as e:

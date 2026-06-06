@@ -1,12 +1,14 @@
-from fastapi import APIRouter,Body,HTTPException
+from fastapi import APIRouter,Body,HTTPException,Depends
 from app.services import profile_services
+from app.utils.security import verificar_token
 
 router=APIRouter(tags=['Perfil'])
 
 @router.get('/')
-def get_profile():
+def get_profile(token_data:dict = Depends(verificar_token)):
     try:
-        return profile_services.obtener_perfil_usuario(12)
+        nro_usuario=token_data.get('nro_usuario')
+        return profile_services.obtener_perfil_usuario(nro_usuario)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as err:

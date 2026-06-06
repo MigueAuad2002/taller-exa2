@@ -29,28 +29,28 @@ def create_vehiculo(data: dict = Body(...), token_data: dict = Depends(verificar
     
     rol_autenticado = token_data.get('nombre_rol')
     
-    # --- NUEVA LÓGICA DE NEGOCIO INTEGRADA ---
+    #SI EL USUARIO A REGISTRAR VEHICULO ES UN CLIENTE SE LE ASIGNA A SU USUARIO
     if rol_autenticado == 'CLIENTE':
-        # Si es cliente, ignoramos o sobreescribimos lo que mande el JSON 
-        # y le asignamos directamente SU ID extraído del Token por seguridad.
         data['nro_usuario'] = token_data.get('nro_usuario')
         
+    #SI EL USUARIO A REGISTRAR VEHICULO ES UN ADMINISTRADOR DEBE ESPECIFICAR A QUE CLIENTE LO ESTA ASIGNANDO
     elif rol_autenticado == 'ADMINISTRADOR':
-        # Si es admin, es obligatorio que el JSON declare a qué cliente va el vehículo
         if not data.get('nro_usuario'):
             raise HTTPException(
                 status_code=400, 
                 detail="Como ADMINISTRADOR, debe especificar el campo 'nro_usuario' para asignar el vehículo al cliente."
             )
+    #CUALQUIER OTRO ROL NO PUEDE REGISTRAR VEHICULOS
     else:
-        # Cualquier otro rol (como MECANICO) queda bloqueado
         raise HTTPException(status_code=403, detail="Tu rol no tiene permisos para registrar vehículos.")
-    # ----------------------------------------
 
     try:
+
         return vehiculos_services.registrar_vehiculo(data)
+    
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error interno en BD: {str(e)}")
 
