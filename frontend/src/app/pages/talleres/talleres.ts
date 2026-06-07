@@ -5,9 +5,11 @@ import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TalleresService, Taller, Empresa } from '../../services/talleres';
 import { AuthService } from '../../services/auth';
+import { LeafletService } from '../../services/leaflet'; 
 
 // BORRAMOS el import estático de Leaflet. Solo traeremos los TIPOS para que TypeScript no moleste
 import type * as Leaflet from 'leaflet'; 
+
 
 @Component({
   selector: 'app-talleres',
@@ -23,6 +25,8 @@ export class TalleresComponent implements OnInit {
   private ngZone = inject(NgZone);
   private destroyRef = inject(DestroyRef);
   private platformId = inject(PLATFORM_ID);
+
+  private leafletService = inject(LeafletService);
 
   talleres: Taller[] = [];
   talleresFiltrados: Taller[] = [];
@@ -48,7 +52,7 @@ export class TalleresComponent implements OnInit {
   nuevoServicio = { nombre_servicio: '', descripcion: '' };
 
   // --- VARIABLES DEL MAPA (Tipadas con la interfaz de arriba) ---
-  private L: typeof Leaflet | any; // <-- Aquí guardaremos la librería dinámicamente
+  private L: any;
   mapa: any = null;
   marcador: any = null;
 
@@ -61,10 +65,14 @@ export class TalleresComponent implements OnInit {
 
     this.cargando = true;
 
-    // 2. ¡LA MAGIA SSR! Importamos la librería real SOLO en el navegador.
-    this.L = await import('leaflet');
-    this.configurarIconoLeaflet(); // Ahora sí podemos configurar el ícono
+    // 2. Cargamos Leaflet desde el servicio (¡que ya trae el ícono configurado!)
+    this.L = await this.leafletService.loadLeaflet();
 
+    if (!this.L) {
+      this.cargando = false;
+      return;
+    }
+    
     // 3. Esperamos el token
     let intentos = 0;
     while (!this.authService.obtenerToken() && intentos < 10) {
@@ -90,20 +98,6 @@ export class TalleresComponent implements OnInit {
     }
   }
 
-  // --- ARREGLO DEL ICONO DE LEAFLET EN ANGULAR ---
-  configurarIconoLeaflet() {
-    if (!this.L) return; // Por si acaso
-    const iconDefault = this.L.icon({
-      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
-    this.L.Marker.prototype.options.icon = iconDefault;
-  }
 
   inicializarTaller() {
     return {
