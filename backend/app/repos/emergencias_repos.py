@@ -190,3 +190,52 @@ def eliminar_emergencia_db(nro_emergencia: int):
         return filas_afectadas > 0
     finally:
         db.close_connection()
+
+# --- AGREGAR ESTO AL FINAL DE emergencias_repos.py ---
+
+def obtener_emergencia_por_id(nro_emergencia: int):
+    db = PostgreSQL()
+    db.create_connection()
+    try:
+        query = f"SELECT * FROM {Config.SCHEMA}.emergencia WHERE nro_emergencia = %s;"
+        resultado = db.execute_query(query, (nro_emergencia,), fetchone=True)
+        if resultado:
+            # Mapeamos los índices de tu tabla (Ajusta los índices si tu tabla tiene otro orden)
+            return {
+                "nro_emergencia": resultado[0],
+                "estado": resultado[6], 
+                "nro_usuario": resultado[8], # ID del cliente
+                "nro_taller": resultado[9]   # ID del taller asignado
+            }
+        return None
+    finally:
+        db.close_connection()
+
+def actualizar_estado_emergencia_db(nro_emergencia: int, nuevo_estado: str):
+    db = PostgreSQL()
+    db.create_connection()
+    try:
+        query = f"UPDATE {Config.SCHEMA}.emergencia SET estado = %s WHERE nro_emergencia = %s;"
+        filas_afectadas = db.execute_query(query, (nuevo_estado, nro_emergencia), commit=True)
+        return filas_afectadas > 0
+    finally:
+        db.close_connection()
+
+# --- FUNCIONES SIMULADAS PARA EVIDENCIAS (Ajusta el nombre de tu tabla) ---
+def agregar_evidencia_db(nro_emergencia: int, url_archivo: str):
+    db = PostgreSQL()
+    db.create_connection()
+    try:
+        query = f"INSERT INTO {Config.SCHEMA}.evidencia (nro_emergencia, url_archivo) VALUES (%s, %s);"
+        db.execute_query(query, (nro_emergencia, url_archivo), commit=True)
+    finally:
+        db.close_connection()
+
+def eliminar_evidencia_db(nro_evidencia: int):
+    db = PostgreSQL()
+    db.create_connection()
+    try:
+        query = f"DELETE FROM {Config.SCHEMA}.evidencia WHERE nro_evidencia = %s;"
+        db.execute_query(query, (nro_evidencia,), commit=True)
+    finally:
+        db.close_connection()
