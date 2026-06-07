@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, inject, NgZone, PLATFORM_ID } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { TalleresService, Taller } from '../../services/talleres';
+import { LeafletService } from '../../services/leaflet'; 
 import type * as LeafletType from 'leaflet';
 
 @Component({
@@ -11,33 +12,29 @@ import type * as LeafletType from 'leaflet';
 })
 export class MapaTalleresComponent implements OnInit, OnDestroy {
   private talleresService = inject(TalleresService);
+  private leafletService = inject(LeafletService); // <-- Inyectar el servicio
   private ngZone = inject(NgZone);
   private platformId = inject(PLATFORM_ID);
 
-  private L!: typeof LeafletType;
+  private L!: typeof LeafletType | any; // Any nos salva de los problemas de tipado con .default
   private mapa: LeafletType.Map | null = null;
   private talleres: Taller[] = [];
 
   async ngOnInit() {
+    // 1. Validar si estamos en el navegador (para SSR)
     if (!isPlatformBrowser(this.platformId)) return;
 
-    this.L = await import('leaflet') as any;
+    // 2. Cargar Leaflet usando el servicio centralizado
+    this.L = await this.leafletService.loadLeaflet();
 
-    // Fix íconos Leaflet + Angular/Webpack
-    const iconDefault = this.L.icon({
-      iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-      iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
-      popupAnchor: [1, -34],
-      shadowSize: [41, 41]
-    });
-    this.L.Marker.prototype.options.icon = iconDefault;
+    if (!this.L) return;
 
+    // 3. Ya no necesitamos configurar los íconos por defecto aquí, el servicio lo hace.
+    
+    // 4. Inicializar el mapa
     this.ngZone.runOutsideAngular(() => {
       this.mapa = this.L.map('mapa-completo', {
-        center: [-17.7833, -63.1821],
+        center: [-17.7833, -63.1821], // Coordenadas de Santa Cruz
         zoom: 13,
         zoomControl: true
       });
@@ -69,7 +66,7 @@ export class MapaTalleresComponent implements OnInit, OnDestroy {
   }
 
   pintarPines() {
-    if (!this.mapa) return;
+    if (!this.mapa || !this.L) return;
 
     const bounds: LeafletType.LatLngTuple[] = [];
 
@@ -85,6 +82,7 @@ export class MapaTalleresComponent implements OnInit, OnDestroy {
         </svg>
       `;
 
+      // Usar divIcon que sí viene de Leaflet, configurado de manera correcta
       const customIcon = this.L.divIcon({
         html: iconSvg,
         className: '',
@@ -131,8 +129,11 @@ export class MapaTalleresComponent implements OnInit, OnDestroy {
       bounds.push([taller.latitud, taller.longitud]);
     });
 
-    if (bounds.length > 1 && this.mapa) {
-      this.mapa.fitBounds(bounds, { padding: [50, 50] });
+    if (bounds.length > 1 && this.mapa && this.L) {
+      // ngZone.runOutsideAngular es bueno aquí si fitBounds dispara muchos eventos de move
+      this.ngZone.runOutsideAngular(() => {
+          this.mapa!.fitBounds(bounds, { padding: [50, 50] });
+      });
     }
   }
 }
