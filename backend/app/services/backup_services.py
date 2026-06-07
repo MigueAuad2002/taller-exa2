@@ -7,53 +7,54 @@ from app.config import Config
 
 def buscar_pg_dump():
     """
-    Función 'Radar' Mejorada: Escanea múltiples discos y carpetas.
+    BUSCA EL DIRECTORIO DE PG_DUMP
     """
-    # 1. Si está en las variables de entorno globales, lo usa
-    if shutil.which("pg_dump"):
-        return "pg_dump"
+    #BUSQUEDA PRINCIPAL EN SERVIDOR (LINUX)
+    comando = shutil.which("pg_dump")
+    if comando:
+        return comando
     
-    # 2. Rutas de búsqueda ampliadas (Agregamos el disco D:\)
-    rutas_busqueda = [
+    #SEGUNDA BUSQUEDA (PARA DESARROLLO EN WINDOWS)
+    rutas_windows = [
         r"C:\Program Files\PostgreSQL\*\bin\pg_dump.exe",
         r"C:\Program Files (x86)\PostgreSQL\*\bin\pg_dump.exe",
-        r"D:\Program Files\PostgreSQL\*\bin\pg_dump.exe",
-        r"D:\PostgreSQL\*\bin\pg_dump.exe",
-        r"C:\PostgreSQL\*\bin\pg_dump.exe"
+        r"D:\Program Files\PostgreSQL\*\bin\pg_dump.exe"
     ]
     
-    for ruta in rutas_busqueda:
+    for ruta in rutas_windows:
         coincidencias = glob.glob(ruta)
         if coincidencias:
-            # Ordenamos por versión (para agarrar la más nueva si hay varias)
             return sorted(coincidencias)[-1]
             
-    # 3. Si no lo encuentra en ningún lado
-    raise FileNotFoundError("No se encontró 'pg_dump.exe' automáticamente ni en C:\\ ni en D:\\. Por favor asegúrate de tener PostgreSQL instalado en tu computadora.")
+    #RETORNAR ERROR
+    raise FileNotFoundError(
+        "No se encontró 'pg_dump'. Si estás en local, instala PostgreSQL. "
+        "Añade 'apt-get install -y postgresql-client' a tu Build Command."
+    )
 
 def generar_backup_bd_memoria():
     try:
         fecha_actual = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        nombre_archivo = f"taller_backup_{fecha_actual}.sql"
+        nombre_archivo = f"backup_red_talleres_{fecha_actual}.sql"
         
         env = os.environ.copy()
         env['PGPASSWORD'] = Config.DB_PASSWORD
 
-        # --- APLICAMOS LA SOLUCIÓN DINÁMICA ---
         comando_pg_dump = buscar_pg_dump()
 
         comando = [
-            comando_pg_dump, # Usamos la ruta o el comando que el radar encontró
+            comando_pg_dump,
             "-h", Config.DB_HOST,
             "-p", str(Config.DB_PORT),
             "-U", Config.DB_USER,
-            "-F", "p", 
-            "-O",
-            "-x",
+            "-F", "p",  
+            "-O",       
+            "-x",       
             "-n", Config.SCHEMA,
             Config.DB_NAME
         ]
 
+        
         proceso = subprocess.run(comando, env=env, capture_output=True, text=False, check=True)
 
         return {
@@ -63,9 +64,7 @@ def generar_backup_bd_memoria():
 
     except subprocess.CalledProcessError as e:
         error_msg = e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
-        print(f"[ERROR de pg_dump] {error_msg}")
-        raise RuntimeError(f'Fallo al extraer los datos: {error_msg}')
+        raise RuntimeError(f'Fallo al extraer los datos de la base de datos: {error_msg}')
         
     except Exception as e:
-        print(f"[ERROR Backup] {str(e)}")
-        raise RuntimeError(f'Error generando el backup: {str(e)}')
+        raise RuntimeError(f'Error inesperado generando el backup: {str(e)}')

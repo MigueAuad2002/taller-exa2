@@ -5,6 +5,7 @@ import { HomeComponent } from './pages/home/home';
 import { PerfilComponent } from './pages/perfil/perfil';
 import { RolesComponent } from './pages/roles/roles';
 import { ListaEmpresasComponent } from './pages/empresas/lista-empresas/lista-empresas';
+import { BackupComponent } from './pages/backup/backup';
 
 //LAYOUTS
 import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout';
@@ -12,6 +13,7 @@ import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout';
 //GUARDS
 import { publicGuard } from './guards/public-guard';
 import { authGuard } from './guards/auth-guard';
+
 
 
 
@@ -32,8 +34,8 @@ export const routes: Routes = [
         children: [
             { path: 'usuarios', component: ListaUsuariosComponent },
             { path: 'roles', component: RolesComponent },
-            { path: 'empresas', component: ListaEmpresasComponent }
-            
+            { path: 'empresas', component: ListaEmpresasComponent },
+            { path:'backup',component:BackupComponent }            
         ]
     },
     { path: '**', redirectTo: 'login' }

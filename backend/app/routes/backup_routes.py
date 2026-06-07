@@ -8,7 +8,8 @@ router = APIRouter(tags=["Backups"])
 
 @router.get('/manual')
 def manual_backup(token_data: dict = Depends(verificar_token)):
-    # VALIDACIÓN DE SEGURIDAD: Solo el Administrador puede descargar toda la base de datos
+
+    #VALIDACION DE ROL, SOLO EL ADMIN PUEDE SACAR BACKUP DE LA DB
     rol_usuario = token_data.get('nombre_rol')
     if rol_usuario != 'ADMINISTRADOR':
         raise HTTPException(
@@ -17,13 +18,13 @@ def manual_backup(token_data: dict = Depends(verificar_token)):
         )
 
     try:
-        # Ejecutamos el servicio
+        #EJECUTAR EL SERVICIO
         res = backup_services.generar_backup_bd_memoria()
         
-        # Convertimos los bytes obtenidos de pg_dump en un buffer de memoria
+        
         buffer_memoria = io.BytesIO(res['file_bytes'])
         
-        # Retornamos un StreamingResponse (Equivalente al send_file de Flask)
+        #RETORNAR ARCHIVO .SQL
         return StreamingResponse(
             buffer_memoria, 
             media_type="application/sql",

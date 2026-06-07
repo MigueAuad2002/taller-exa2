@@ -9,3 +9,58 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* ==========================================================================
+   ESTILOS DE SCROLLBAR (Global)
+   ========================================================================== */
+
+/* 1. Para navegadores basados en WebKit (Chrome, Edge, Safari, Opera) */
+
+::-webkit-scrollbar {
+  width: 8px;  /* Ancho de la barra vertical */
+  height: 8px; /* Alto de la barra horizontal */
+}
+
+/* El fondo (riel) de la barra */
+::-webkit-scrollbar-track {
+  background: #f8fafc; /* Equivalente a slate-50 */
+  border-radius: 4px;
+}
+
+/* La barra deslizable (thumb) */
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* Equivalente a slate-300 */
+  border-radius: 4px;
+}
+
+/* La barra deslizable cuando pasas el mouse por encima */
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* Equivalente a slate-400 */
+}
+
+
+/* 2. Para Firefox (Firefox usa un estándar diferente) */
+
+* {
+  /* Opciones: auto, thin, none */
+  scrollbar-width: thin; 
+  /* Primer color es el thumb (barra), segundo es el track (fondo) */
+  scrollbar-color: #cbd5e1 #f8fafc; 
+}
+
+/* Adaptación para modo oscuro */
+.dark ::-webkit-scrollbar-track {
+  background: #0f172a; /* slate-900 */
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155; /* slate-700 */
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569; /* slate-600 */
+}
+
+.dark * {
+  scrollbar-color: #334155 #0f172a;
+}
