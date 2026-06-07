@@ -8,12 +8,13 @@ def obtener_todos_los_usuarios():
     try:
         query = f"""
             SELECT 
-                a.nro_usuario, a.ci, a.nombre_usuario, a.estado, a.id_empresa,
+                a.nro_usuario, a.ci, a.nombre_usuario, a.estado, a.id_empresa,d.nombre_empresa,
                 b.nombre_completo, b.correo, b.telefono, b.direccion,
                 c.nombre_rol, a.nro_rol
             FROM {Config.SCHEMA}.usuario a
             INNER JOIN {Config.SCHEMA}.persona b ON a.ci = b.ci
             INNER JOIN {Config.SCHEMA}.rol c ON a.nro_rol = c.nro_rol
+            LEFT JOIN {Config.SCHEMA}.empresa d ON d.id_empresa=a.id_empresa
             WHERE a.estado = 'ACTIVO';
         """
         resultados = db.execute_query(query, fetchall=True)
@@ -23,9 +24,10 @@ def obtener_todos_los_usuarios():
             for r in resultados:
                 usuarios.append({
                     "nro_usuario": r[0], "ci": r[1], "nombre_usuario": r[2], 
-                    "estado": r[3], "id_empresa": r[4], "nombre_completo": r[5], 
-                    "correo": r[6], "telefono": r[7], "direccion": r[8], 
-                    "nombre_rol": r[9], "nro_rol": r[10]
+                    "estado": r[3], "id_empresa": r[4],"nombre_empresa": r[5], 
+                    "nombre_completo": r[6], 
+                    "correo": r[7], "telefono": r[8], "direccion": r[9], 
+                    "nombre_rol": r[10], "nro_rol": r[11]
                 })
         return usuarios
     finally:

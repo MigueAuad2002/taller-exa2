@@ -37,3 +37,41 @@ def get_profile(nro_usuario):
         raise ValueError(f'ERROR: {str(e)}')
     finally:
         db.close_connection()
+
+def update_profile(data:dict):
+    db=PostgreSQL()
+    try:
+        db.create_connection()
+
+       #PREPARAR INSERT PERSONA
+        query=f"""
+            UPDATE {Config.SCHEMA}.persona
+            SET telefono=%s, correo=%s, direccion=%s
+            WHERE ci=%s
+        """
+        params=(data['telefono'],data['correo'],data['direccion'],data['ci'])
+
+        if data.get('password_hash'):
+            hacer_commit=False
+        else:
+            hacer_commit=True
+
+        db.execute_query(query,params,commit=hacer_commit)
+
+        if data.get('password_hash'):
+            query_user=f"""
+            UPDATE {Config.SCHEMA}.usuario
+            SET password_hash=%s
+            WHERE nro_usuario=%s
+            """
+            param_user=(data['password_hash'],data['nro_usuario'])
+            db.execute_query(query_user,param_user,commit=True)
+        
+        return {
+            'success':True,
+            'message':'Perfil Actualizado Correctamente.'
+        }  
+            
+        
+    except Exception as e:
+        raise ValueError(f'ERROR: {str(e)}')

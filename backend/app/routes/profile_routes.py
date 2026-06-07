@@ -13,3 +13,15 @@ def get_profile(token_data:dict = Depends(verificar_token)):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as err:
         raise HTTPException(status_code=500, detail=f"Error interno en : {err}")
+    
+
+@router.put('/')
+def update_profile(token_data:dict=Depends(verificar_token),data:dict=Body(...)):
+    try:
+        nro_usuario=token_data.get('nro_usuario')
+
+        return profile_services.actualizar_perfil_usuario(nro_usuario,data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Error interno en : {err}")

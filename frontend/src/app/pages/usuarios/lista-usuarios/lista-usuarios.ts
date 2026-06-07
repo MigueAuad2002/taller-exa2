@@ -4,6 +4,15 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment.development';
 import { AuthService } from '../../../services/auth';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { DestroyRef } from '@angular/core';
+
+export interface Empresa {
+  id_empresa: number;
+  nombre_empresa: string;
+  nit?: string | null;
+  estado: string;
+}
 
 export interface Usuario {
   nro_usuario?: number;
@@ -11,6 +20,7 @@ export interface Usuario {
   nombre_usuario: string;
   estado: string;
   id_empresa?: number | null;
+  nombre_empresa?: string; 
   nombre_completo: string;
   correo: string;
   telefono: string;
@@ -20,10 +30,16 @@ export interface Usuario {
   password?: string;
 }
 
-export interface RespuestaApi {
+export interface RespuestaApiUsuarios {
   success: boolean;
   message: string;
   data: Usuario[];
+}
+
+export interface RespuestaApiEmpresas {
+  success: boolean;
+  message: string;
+  data: Empresa[];
 }
 
 @Component({
@@ -35,12 +51,20 @@ export interface RespuestaApi {
 export class ListaUsuariosComponent implements OnInit {
   
   private http = inject(HttpClient);
-  private authService = inject(AuthService);
   private cdr = inject(ChangeDetectorRef);
-  private ngZone = inject(NgZone); // <--- INYECTAMOS NGZONE
+  private authService = inject(AuthService);
+  private ngZone = inject(NgZone);
   private apiUrl = environment.apiUrl;
+  private destroyRef = inject(DestroyRef);
 
+  // --- VARIABLES DE DATOS ---
   usuarios: Usuario[] = [];
+  usuariosFiltrados: Usuario[] = []; // <-- Nueva variable para la vista filtrada
+  empresas: Empresa[] = []; 
+  
+  // --- VARIABLE PARA EL FILTRO ---
+  filtroEmpresa: string = ''; // '' significa "Mostrar Todas"
+
   cargando: boolean = false;
   mensajeError: string = '';
 
@@ -60,14 +84,45 @@ export class ListaUsuariosComponent implements OnInit {
     { id: 4, nombre: 'CLIENTE' }
   ];
 
-  ngOnInit() {
-    this.cargarUsuarios();
+  async ngOnInit() {
+    this.cargando = true;
+    
+    // Esperar a que el token esté disponible (esto evita la petición 401 inicial)
+    let intentos = 0;
+    while (!this.authService.obtenerToken() && intentos < 10) {
+      await new Promise(r => setTimeout(r, 50)); 
+      intentos++;
+    }
+
+    // Si después de esperar sigue sin haber token, no hacemos nada
+    if (this.authService.obtenerToken()) {
+      this.cargarEmpresas();
+      this.cargarUsuarios();
+    } else {
+      this.cargando = false;
+      this.mensajeError = "No se pudo iniciar sesión. Por favor recarga.";
+    }
+  }
+
+  // --- LÓGICA DE FILTRADO Y MÉTRICAS ---
+  
+  aplicarFiltros() {
+    if (this.filtroEmpresa === '') {
+      // Si no hay filtro, mostramos todos
+      this.usuariosFiltrados = [...this.usuarios];
+    } else {
+      // Si hay filtro, convertimos el ID a número y filtramos
+      const idBuscado = Number(this.filtroEmpresa);
+      this.usuariosFiltrados = this.usuarios.filter(u => u.id_empresa === idBuscado);
+    }
+    // Actualizamos las métricas basándonos EN LO FILTRADO, no en el total general
+    this.actualizarMetricas();
   }
 
   actualizarMetricas() {
-    this.totalUsuarios = this.usuarios.length;
-    this.usuariosActivos = this.usuarios.filter(u => u.estado === 'ACTIVO').length;
-    this.usuariosInactivos = this.usuarios.filter(u => u.estado === 'INACTIVO').length;
+    this.totalUsuarios = this.usuariosFiltrados.length;
+    this.usuariosActivos = this.usuariosFiltrados.filter(u => u.estado === 'ACTIVO').length;
+    this.usuariosInactivos = this.usuariosFiltrados.filter(u => u.estado === 'INACTIVO').length;
   }
 
   obtenerIniciales(nombre: string): string {
@@ -82,26 +137,47 @@ export class ListaUsuariosComponent implements OnInit {
   inicializarUsuario(): Usuario {
     return {
       ci: '', nombre_usuario: '', nombre_completo: '', correo: '',
-      telefono: '', direccion: '', estado: 'ACTIVO', nro_rol: 3, id_empresa: 1
+      telefono: '', direccion: '', estado: 'ACTIVO', nro_rol: 4, 
+      id_empresa: null 
     };
   }
 
-  // --- CRUD OPERATIONS ---
+  // --- MÉTODOS DE RED ---
+
+  cargarEmpresas() {
+    // Obtenemos el token directamente del servicio
+    const token = this.authService.obtenerToken();
+    
+    // Creamos los headers manualmente
+    const headers = { 
+      'Authorization': `Bearer ${token}` 
+    };
+
+    this.http.get<RespuestaApiEmpresas>(`${this.apiUrl}/api/empresas`, { headers })
+    .pipe(takeUntilDestroyed(this.destroyRef))
+    .subscribe({
+      next: (res) => {
+        this.ngZone.run(() => {
+          if (res.success) {
+            this.empresas = res.data.filter(e => e.estado === 'ACTIVO');
+          }
+          this.cdr.detectChanges();
+        });
+      },
+      error: (err) => console.error('Error cargando empresas:', err)
+    });
+  }
 
   cargarUsuarios() {
     this.cargando = true;
     this.mensajeError = '';
     
-    const headers = { Authorization: `Bearer ${this.authService.obtenerToken()}` };
-
-    this.http.get<RespuestaApi>(`${this.apiUrl}/api/usuarios/`, { headers }).subscribe({
+    this.http.get<RespuestaApiUsuarios>(`${this.apiUrl}/api/usuarios/`).subscribe({
       next: (res) => {
-        // ENVOLVEMOS LA RESPUESTA EN NGZONE PARA FORZAR EL RENDERIZADO
         this.ngZone.run(() => {
           if (res.success) {
-            // USAMOS [...] PARA CREAR UNA NUEVA REFERENCIA EN MEMORIA
             this.usuarios = [...res.data]; 
-            this.actualizarMetricas();
+            this.aplicarFiltros(); // <-- LLAMAMOS AL FILTRO AL TERMINAR DE CARGAR
           } else {
             this.mensajeError = res.message || 'Error al obtener datos.';
           }
@@ -114,23 +190,21 @@ export class ListaUsuariosComponent implements OnInit {
           this.mensajeError = 'Error de conexión al cargar los usuarios.';
           this.cargando = false;
           this.cdr.detectChanges();
-          console.error(err);
         });
       }
     });
   }
 
   guardarUsuario() {
-    if (!this.usuarioForm.ci || !this.usuarioForm.nombre_completo || !this.usuarioForm.nombre_usuario) {
-      alert('Por favor complete los campos obligatorios.');
+    if (!this.usuarioForm.ci || !this.usuarioForm.nombre_completo || !this.usuarioForm.nombre_usuario || !this.usuarioForm.id_empresa) {
+      alert('Por favor complete todos los campos obligatorios, incluyendo la Empresa.');
       return;
     }
 
-    const headers = { Authorization: `Bearer ${this.authService.obtenerToken()}` };
     this.cargando = true;
 
     if (this.modoEdicion) {
-      this.http.put(`${this.apiUrl}/api/usuarios/${this.usuarioForm.nro_usuario}`, this.usuarioForm, { headers }).subscribe({
+      this.http.put(`${this.apiUrl}/api/usuarios/${this.usuarioForm.nro_usuario}`, this.usuarioForm).subscribe({
         next: () => {
           this.ngZone.run(() => {
             this.cerrarModal();
@@ -139,7 +213,7 @@ export class ListaUsuariosComponent implements OnInit {
         },
         error: () => {
           this.ngZone.run(() => {
-            alert('Error al actualizar el usuario en el servidor.');
+            alert('Error al actualizar el usuario.');
             this.cargando = false;
             this.cdr.detectChanges();
           });
@@ -152,7 +226,7 @@ export class ListaUsuariosComponent implements OnInit {
         return;
       }
 
-      this.http.post(`${this.apiUrl}/api/usuarios/`, this.usuarioForm, { headers }).subscribe({
+      this.http.post(`${this.apiUrl}/api/usuarios/`, this.usuarioForm).subscribe({
         next: () => {
           this.ngZone.run(() => {
             this.cerrarModal();
@@ -172,11 +246,8 @@ export class ListaUsuariosComponent implements OnInit {
 
   eliminarUsuario(id?: number) {
     if (!id) return;
-    
     if (confirm('¿Está seguro que desea eliminar a este usuario?')) {
-      const headers = { Authorization: `Bearer ${this.authService.obtenerToken()}` };
-      
-      this.http.delete(`${this.apiUrl}/api/usuarios/${id}`, { headers }).subscribe({
+      this.http.delete(`${this.apiUrl}/api/usuarios/${id}`).subscribe({
         next: () => {
           this.ngZone.run(() => {
             this.cargarUsuarios();

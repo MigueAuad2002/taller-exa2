@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { isPlatformBrowser } from '@angular/common'; 
 import { environment } from '../../environments/environment.development';
 
+
 @Injectable({
   providedIn: 'root'
 })
@@ -23,7 +24,8 @@ export class AuthService {
     }
   }
 
-  obtenerToken() {
+  
+  obtenerToken(): string | null {
     if (isPlatformBrowser(this.platformId)) {
       return localStorage.getItem('token');
     }
