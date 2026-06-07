@@ -6,6 +6,8 @@ import { PerfilComponent } from './pages/perfil/perfil';
 import { RolesComponent } from './pages/roles/roles';
 import { ListaEmpresasComponent } from './pages/empresas/lista-empresas/lista-empresas';
 import { BackupComponent } from './pages/backup/backup';
+import { TalleresComponent } from './pages/talleres/talleres';
+import { MapaTalleresComponent } from './pages/mapa-talleres/mapa-talleres';
 
 //LAYOUTS
 import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout';
@@ -35,7 +37,9 @@ export const routes: Routes = [
             { path: 'usuarios', component: ListaUsuariosComponent },
             { path: 'roles', component: RolesComponent },
             { path: 'empresas', component: ListaEmpresasComponent },
-            { path:'backup',component:BackupComponent }            
+            { path:'backup',component:BackupComponent },
+            { path:'talleres', component: TalleresComponent },
+            { path:'mapa-talleres', component: MapaTalleresComponent }  
         ]
     },
     { path: '**', redirectTo: 'login' }

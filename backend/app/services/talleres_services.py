@@ -1,7 +1,7 @@
 from app.repos import talleres_repos
 
-def listar_talleres():
-    talleres = talleres_repos.obtener_todos_los_talleres()
+def listar_talleres(id_empresa_filtro=None):
+    talleres = talleres_repos.obtener_todos_los_talleres(id_empresa_filtro)
     return {
         "success": True,
         "message": "Talleres recuperados exitosamente",

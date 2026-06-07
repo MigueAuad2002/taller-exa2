@@ -1,17 +1,28 @@
 from app.classes.postgres import PostgreSQL
 from app.config import Config
 
-# --- LEER TALLERES ---
-def obtener_todos_los_talleres():
+#OBTENER TALLERES
+def obtener_todos_los_talleres(id_empresa_filtro=None):
     db = PostgreSQL()
     db.create_connection()
     try:
-        query = f"""
-            SELECT nro_taller, nombre_taller, direccion_escrita, latitud, longitud, disponibilidad, fecha_registro, id_empresa
-            FROM {Config.SCHEMA}.taller
-            ORDER BY nro_taller ASC;
-        """
-        resultados = db.execute_query(query, fetchall=True)
+        # LÓGICA DEL FILTRO:
+        if id_empresa_filtro:
+            query = f"""
+                SELECT nro_taller, nombre_taller, direccion_escrita, latitud, longitud, disponibilidad, fecha_registro, id_empresa
+                FROM {Config.SCHEMA}.taller
+                WHERE id_empresa = %s
+                ORDER BY nro_taller ASC;
+            """
+            resultados = db.execute_query(query, (id_empresa_filtro,), fetchall=True)
+        else:
+            
+            query = f"""
+                SELECT nro_taller, nombre_taller, direccion_escrita, latitud, longitud, disponibilidad, fecha_registro, id_empresa
+                FROM {Config.SCHEMA}.taller
+                ORDER BY nro_taller ASC;
+            """
+            resultados = db.execute_query(query, fetchall=True)
         
         talleres = []
         if resultados:
@@ -20,7 +31,6 @@ def obtener_todos_los_talleres():
                     "nro_taller": r[0],
                     "nombre_taller": r[1],
                     "direccion_escrita": r[2],
-                    # Convertimos a float porque numeric en Python a veces llega como Decimal
                     "latitud": float(r[3]) if r[3] is not None else None,
                     "longitud": float(r[4]) if r[4] is not None else None,
                     "disponibilidad": r[5],
@@ -31,7 +41,7 @@ def obtener_todos_los_talleres():
     finally:
         db.close_connection()
 
-# --- CREAR TALLER ---
+#CREAR NUEVO TALLER
 def crear_taller_db(nombre_taller, direccion_escrita, latitud, longitud, id_empresa):
     db = PostgreSQL()
     db.create_connection()
@@ -47,7 +57,7 @@ def crear_taller_db(nombre_taller, direccion_escrita, latitud, longitud, id_empr
     finally:
         db.close_connection()
 
-# --- ACTUALIZAR TALLER ---
+#ACTUALIZAR TALLER
 def actualizar_taller_db(nro_taller, nombre_taller, direccion_escrita, latitud, longitud, disponibilidad, id_empresa):
     db = PostgreSQL()
     db.create_connection()
@@ -62,7 +72,7 @@ def actualizar_taller_db(nro_taller, nombre_taller, direccion_escrita, latitud, 
     finally:
         db.close_connection()
 
-# --- ELIMINAR TALLER (Borrado físico) ---
+#ELIMINAR TALLER
 def eliminar_taller_db(nro_taller: int):
     db = PostgreSQL()
     db.create_connection()
@@ -73,10 +83,8 @@ def eliminar_taller_db(nro_taller: int):
     finally:
         db.close_connection()
 
-# =================================================================
-#                   CRUD DE SERVICIOS DEL TALLER
-# =================================================================
 
+#SERVICIOS DEL TALLER
 def obtener_servicios_taller(nro_taller: int):
     db = PostgreSQL()
     db.create_connection()
@@ -137,5 +145,16 @@ def eliminar_servicio_taller_db(nro_servicio: int, nro_taller: int):
         query = f"DELETE FROM {Config.SCHEMA}.servicio_taller WHERE nro_servicio = %s AND nro_taller = %s;"
         filas_afectadas = db.execute_query(query, (nro_servicio, nro_taller), commit=True)
         return filas_afectadas > 0
+    finally:
+        db.close_connection()
+
+
+def obtener_id_empresa_de_taller(nro_taller: int):
+    db = PostgreSQL()
+    db.create_connection()
+    try:
+        query = f"SELECT id_empresa FROM {Config.SCHEMA}.taller WHERE nro_taller = %s;"
+        resultado = db.execute_query(query, (nro_taller,), fetchone=True)
+        return resultado[0] if resultado else None
     finally:
         db.close_connection()

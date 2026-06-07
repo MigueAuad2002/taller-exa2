@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import 'leaflet/dist/leaflet.css';
 
 @tailwind base;
 @tailwind components;
@@ -63,4 +64,34 @@ body {
 
 .dark * {
   scrollbar-color: #334155 #0f172a;
+}
+
+.leaflet-tooltip-taller {
+  background-color: #1e3a8a;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+ 
+.leaflet-tooltip-taller::before {
+  border-top-color: #1e3a8a;
+}
+
+.leaflet-tooltip-taller {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18) !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+ 
+/* Quitar el triángulo blanco de Leaflet */
+.leaflet-tooltip-taller::before {
+  display: none !important;
 }
