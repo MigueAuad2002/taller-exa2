@@ -7,8 +7,9 @@ def obtener_todos_los_vehiculos():
     db.create_connection()
     try:
         query = f"""
-            SELECT nro_vehiculo, placa, marca_modelo, "año", fecha_registro, nro_usuario
+            SELECT nro_vehiculo, placa, marca_modelo, "año", vehiculo.fecha_registro, vehiculo.nro_usuario, usuario.nombre_usuario
             FROM {Config.SCHEMA}.vehiculo
+            INNER JOIN {Config.SCHEMA}.usuario ON vehiculo.nro_usuario = usuario.nro_usuario
             ORDER BY nro_vehiculo ASC;
         """
         resultados = db.execute_query(query, fetchall=True)
@@ -22,7 +23,8 @@ def obtener_todos_los_vehiculos():
                     "marca_modelo": r[2],
                     "anio": r[3],
                     "fecha_registro": r[4].strftime("%Y-%m-%d %H:%M:%S") if r[4] else None,
-                    "nro_usuario": r[5]
+                    "nro_usuario": r[5],
+                    "nombre_usuario": r[6]
                 })
         return vehiculos
     finally:
