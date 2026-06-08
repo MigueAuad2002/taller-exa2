@@ -2,8 +2,9 @@ import { Component, OnInit, inject, ChangeDetectorRef, NgZone, PLATFORM_ID } fro
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
-import { EmergenciasService, Emergencia } from '../../services/emergencias';
+import { EmergenciasService, Emergencia, DiagnosticoIAData } from '../../services/emergencias';
 import { AuthService } from '../../services/auth';
+import * as XLSX from 'xlsx'; // Añade esta importación arriba
 
 @Component({
   selector: 'app-emergencias-historial',
@@ -38,6 +39,11 @@ export class EmergenciasHistorialComponent implements OnInit {
   evidenciasDetalle: any[] = [];
   
   emergenciaSeleccionada: Emergencia | null = null;
+
+  // Control de Diagnóstico IA
+  cargandoDiagnostico: boolean = false;
+  diagnosticoIA: DiagnosticoIAData | null = null;
+  mensajeErrorDiagnostico: string = '';
   
   cotizacionForm = {
     precio_estimado: null,
@@ -87,6 +93,30 @@ export class EmergenciasHistorialComponent implements OnInit {
     });
   }
 
+  exportarAExcel() {
+    // 1. Preparamos los datos para el formato Excel (más amigable para humanos)
+    const datosParaExportar = this.emergenciasFiltradas.map(e => ({
+      'Nro. Emergencia': e.nro_emergencia,
+      'Tipo': e.tipo_emergencia,
+      'Estado': e.estado,
+      'Prioridad': e.prioridad,
+      'Fecha Inicio': e.fecha_inicio,
+      'Cliente': e.nombre_usuario,
+      'Placa Vehículo': e.vehiculo_placa || 'N/A',
+      'Marca/Modelo': e.vehiculo_marca || 'N/A',
+      'Taller Asignado': e.nombre_taller || 'Sin asignar'
+    }));
+
+    // 2. Crear una hoja de cálculo (Worksheet)
+    const worksheet: XLSX.WorkSheet = XLSX.utils.json_to_sheet(datosParaExportar);
+    
+    // 3. Crear el libro (Workbook)
+    const workbook: XLSX.WorkBook = { Sheets: { 'Emergencias': worksheet }, SheetNames: ['Emergencias'] };
+    
+    // 4. Generar y descargar el archivo
+    XLSX.writeFile(workbook, `Reporte_Emergencias_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
   aplicarFiltros() {
     let filtradas = [...this.emergencias];
     if (this.filtroEstado) {
@@ -120,6 +150,10 @@ export class EmergenciasHistorialComponent implements OnInit {
     this.cargandoEvidencias = true;
     this.evidenciasDetalle = [];
 
+    this.cargandoDiagnostico = false;
+    this.diagnosticoIA = null;
+    this.mensajeErrorDiagnostico = '';
+
     this.emergenciasService.obtenerEvidenciasEmergencia(emergencia.nro_emergencia).subscribe({
       next: (res) => {
         this.ngZone.run(() => {
@@ -137,9 +171,48 @@ export class EmergenciasHistorialComponent implements OnInit {
     });
   }
 
+  generarDiagnosticoIA() {
+    if (!this.emergenciaSeleccionada) {
+      alert('No hay una emergencia seleccionada.');
+      return;
+    }
+
+    this.cargandoDiagnostico = true;
+    this.diagnosticoIA = null;
+    this.mensajeErrorDiagnostico = '';
+
+    this.emergenciasService.generarDiagnosticoIA(this.emergenciaSeleccionada.nro_emergencia).subscribe({
+      next: (res) => {
+        this.ngZone.run(() => {
+          if (res.success) {
+            this.diagnosticoIA = res.data;
+          } else {
+            this.mensajeErrorDiagnostico = res.message || 'No se pudo generar el diagnóstico IA.';
+          }
+
+          this.cargandoDiagnostico = false;
+          this.cdr.detectChanges();
+        });
+      },
+      error: (err) => {
+        this.ngZone.run(() => {
+          this.mensajeErrorDiagnostico =
+            err.error?.detail || 'La IA no logró analizar la emergencia en este momento.';
+
+          this.cargandoDiagnostico = false;
+          this.cdr.detectChanges();
+        });
+      }
+    });
+  }
+
   cerrarModalDetalles() {
     this.mostrarModalDetalles = false;
-    // Si no vamos a cotizar, limpiamos la selección
+
+    this.cargandoDiagnostico = false;
+    this.diagnosticoIA = null;
+    this.mensajeErrorDiagnostico = '';
+
     if (!this.mostrarModalCotizacion) {
       this.emergenciaSeleccionada = null;
     }
@@ -206,7 +279,12 @@ export class EmergenciasHistorialComponent implements OnInit {
         });
       }
     });
+
+    
+
+    
   }
+  
 
   // --- TRACKING ---
   iniciarTracking(emergencia: Emergencia) {

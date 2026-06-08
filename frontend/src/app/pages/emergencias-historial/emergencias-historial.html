@@ -5,6 +5,11 @@
       <h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Consola de Despacho</h1>
       <p class="text-sm text-gray-500 dark:text-slate-400 mt-1">Monitoreo transaccional de incidentes, ofertas y geoseguimiento.</p>
     </div>
+    <button (click)="exportarAExcel()" 
+        class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md text-sm font-semibold transition-colors shadow-sm flex items-center gap-2">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+  Exportar XLSX
+</button>
     
     <div class="relative w-full sm:w-72">
       <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
@@ -13,6 +18,7 @@
       <input type="text" [(ngModel)]="textoBusqueda" (input)="aplicarFiltros()" placeholder="Buscar incidente o cliente..." class="w-full pl-10 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md p-2.5 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-shadow shadow-sm">
     </div>
   </div>
+  
 
   <div class="flex flex-wrap gap-2 mb-8 border-b border-gray-200 dark:border-slate-800 pb-4">
     <button (click)="setFiltroEstado('')" [ngClass]="filtroEstado === '' ? 'bg-blue-900 text-white dark:bg-blue-600' : 'bg-white text-gray-600 dark:bg-slate-900 dark:text-slate-400 border border-gray-200 dark:border-slate-800'" class="px-4 py-1.5 rounded-sm text-xs font-bold uppercase tracking-wider transition-colors shadow-sm">
@@ -177,6 +183,135 @@
           </div>
         </div>
 
+        <div class="mt-6 border-t border-gray-200 dark:border-slate-800 pt-5">
+
+  <div class="flex items-center justify-between gap-3 mb-4">
+    <div>
+      <h3 class="text-sm font-bold text-gray-800 dark:text-slate-200">
+        Prediagnóstico con IA
+      </h3>
+      <p class="text-xs text-gray-500 dark:text-slate-500 mt-1">
+        Analiza síntomas, vehículo y evidencias para sugerir una prioridad técnica.
+      </p>
+    </div>
+
+    <button
+      *ngIf="esTallerOMecanico()"
+      type="button"
+      (click)="generarDiagnosticoIA()"
+      [disabled]="cargandoDiagnostico"
+      class="px-4 py-2 text-xs font-bold uppercase tracking-wider text-white bg-purple-600 rounded-sm hover:bg-purple-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-lg shadow-purple-500/20">
+
+      <div *ngIf="cargandoDiagnostico" class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+
+      <svg *ngIf="!cargandoDiagnostico"
+          class="w-4 h-4 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24">
+        <path stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.25 8.25L18 9.25l-.25-1a2 2 0 00-1.5-1.5l-1-.25l1-.25a2 2 0 001.5-1.5l.25-1l.25 1a2 2 0 001.5 1.5l1 .25l-1 .25a2 2 0 00-1.5 1.5z">
+        </path>
+      </svg>
+
+      <span>{{ cargandoDiagnostico ? 'Pensando...' : 'Generar diagnóstico IA' }}</span>
+    </button>
+  </div>
+
+  <div *ngIf="cargandoDiagnostico" class="rounded-xl border border-purple-200 dark:border-purple-900/40 bg-purple-50 dark:bg-purple-950/20 p-5">
+    <div class="flex flex-col items-center text-center">
+
+      <div class="relative mb-4">
+        <div class="w-16 h-16 rounded-full border-4 border-purple-200 dark:border-purple-900 border-t-purple-600 animate-spin"></div>
+        <div class="absolute inset-0 flex items-center justify-center">
+          <span class="text-xs font-black text-purple-700 dark:text-purple-300 animate-pulse">IA</span>
+        </div>
+      </div>
+
+      <p class="text-sm font-bold text-purple-800 dark:text-purple-300">
+        La IA está pensando el diagnóstico técnico...
+      </p>
+
+      <div class="mt-4 space-y-2 w-full max-w-sm">
+        <div class="h-2 bg-purple-200 dark:bg-purple-900/50 rounded-full overflow-hidden">
+          <div class="h-full w-2/3 bg-purple-600 rounded-full animate-pulse"></div>
+        </div>
+        <p class="text-[11px] text-purple-700 dark:text-purple-400">
+          Analizando síntomas, prioridad, vehículo y evidencias multimedia.
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <div *ngIf="mensajeErrorDiagnostico && !cargandoDiagnostico"
+       class="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 p-4 text-sm text-red-700 dark:text-red-400">
+    {{ mensajeErrorDiagnostico }}
+  </div>
+
+  <div *ngIf="diagnosticoIA && !cargandoDiagnostico"
+       class="rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/20 p-5">
+
+    <div class="flex items-start gap-3 mb-4">
+      <div class="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+      </div>
+
+      <div class="flex-1">
+        <h4 class="text-sm font-extrabold text-emerald-800 dark:text-emerald-300 uppercase tracking-wide">
+          Resultado del análisis IA
+        </h4>
+        <p class="text-xs text-emerald-700 dark:text-emerald-400 mt-1">
+          Prediagnóstico generado desde el backend.
+        </p>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <p class="text-[10px] uppercase tracking-wider font-bold text-gray-500 dark:text-slate-400 mb-1">
+          Diagnóstico estimado
+        </p>
+        <p class="text-sm leading-relaxed text-gray-800 dark:text-slate-200 bg-white dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900/30 rounded-md p-3">
+          {{ diagnosticoIA.diagnostico_estimado }}
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="bg-white dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900/30 rounded-md p-3">
+          <p class="text-[10px] uppercase tracking-wider font-bold text-gray-500 dark:text-slate-400">
+            Prioridad sugerida
+          </p>
+          <span class="inline-flex mt-2 px-2.5 py-1 text-xs font-black rounded-sm uppercase"
+                [ngClass]="{
+                  'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400': diagnosticoIA.prioridad_sugerida === 'ALTA',
+                  'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400': diagnosticoIA.prioridad_sugerida === 'MEDIA',
+                  'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400': diagnosticoIA.prioridad_sugerida === 'BAJA'
+                }">
+            {{ diagnosticoIA.prioridad_sugerida }}
+          </span>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900/60 border border-emerald-100 dark:border-emerald-900/30 rounded-md p-3">
+                  <p class="text-[10px] uppercase tracking-wider font-bold text-gray-500 dark:text-slate-400">
+                    Requiere grúa
+                  </p>
+                  <span class="inline-flex mt-2 px-2.5 py-1 text-xs font-black rounded-sm uppercase"
+                        [ngClass]="diagnosticoIA.requiere_grua ? 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400'">
+                    {{ diagnosticoIA.requiere_grua ? 'Sí requiere' : 'No requiere' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
       </div>
 
       <div class="px-6 py-4 border-t border-gray-100 dark:border-slate-800 bg-gray-50/80 dark:bg-slate-800/40 flex justify-end gap-3 shrink-0">
@@ -185,9 +320,12 @@
         </button>
         
         <button *ngIf="emergenciaSeleccionada?.estado === 'PENDIENTE' && esTallerOMecanico()" 
-                (click)="pasarACotizacionDesdeDetalles()" 
-                class="px-5 py-2.5 text-xs font-bold uppercase text-white bg-blue-600 rounded-sm hover:bg-blue-700 flex items-center gap-2 shadow-lg shadow-blue-500/20">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                (click)="pasarACotizacionDesdeDetalles()"
+                [disabled]="cargandoDiagnostico"
+                class="px-5 py-2.5 text-xs font-bold uppercase text-white bg-blue-600 rounded-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-blue-500/20">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
           Proceder a Cotizar
         </button>
       </div>

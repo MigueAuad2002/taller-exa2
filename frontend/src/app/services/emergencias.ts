@@ -32,6 +32,18 @@ export interface RespuestaApiEmergencias {
   data: Emergencia[];
 }
 
+export interface DiagnosticoIAData {
+  diagnostico_estimado: string;
+  prioridad_sugerida: string;
+  requiere_grua: boolean;
+}
+
+export interface RespuestaDiagnosticoIA {
+  success: boolean;
+  message: string;
+  data: DiagnosticoIAData;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -76,5 +88,12 @@ export class EmergenciasService {
   
   emitirOferta(datos: any): Observable<any> {
     return this.http.post<any>(`${this.apiUrl}/api/ofertas/`, datos, { headers: this.getHeaders() });
+  }
+
+  generarDiagnosticoIA(nroEmergencia: number): Observable<RespuestaDiagnosticoIA> {
+    return this.http.get<RespuestaDiagnosticoIA>(
+      `${this.apiUrl}/api/diagnostico/${nroEmergencia}`,
+      { headers: this.getHeaders() }
+    );
   }
 }
