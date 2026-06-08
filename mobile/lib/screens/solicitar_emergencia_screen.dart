@@ -4,6 +4,8 @@ import 'package:geolocator/geolocator.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ev_widgets.dart';
 import '../services/emergencia_service.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 // Tipos de emergencia disponibles
 const _tiposEmergencia = [
@@ -50,9 +52,7 @@ class SolicitarEmergenciaScreen extends StatefulWidget {
 class _SolicitarEmergenciaScreenState
     extends State<SolicitarEmergenciaScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _descripcionController = TextEditingController();
-  final _referenciaController = TextEditingController();
-  final _evidenciaController = TextEditingController();
+  
 
   String? _tipoSeleccionado;
   Position? _posicion;
@@ -71,9 +71,6 @@ class _SolicitarEmergenciaScreenState
 
   @override
   void dispose() {
-    _descripcionController.dispose();
-    _referenciaController.dispose();
-    _evidenciaController.dispose();
     super.dispose();
   }
 
@@ -129,16 +126,14 @@ class _SolicitarEmergenciaScreenState
     setState(() => _enviando = true);
 
     try {
-      final evidencia = _evidenciaController.text.trim();
-
       final resultado = await EmergenciaService().crearEmergencia(
         tipoEmergencia: _tipoSeleccionado!,
         latitud: _posicion!.latitude,
         longitud: _posicion!.longitude,
         prioridad: 'MEDIA',
-        descripcion: _descripcionController.text.trim(),
-        referencia: _referenciaController.text.trim(),
-        evidencias: [evidencia],
+        descripcion: '',
+        referencia: '',
+        evidencias: const ['SIN_EVIDENCIA_MOVIL'],
       );
 
       if (!mounted) return;
@@ -272,9 +267,8 @@ class _SolicitarEmergenciaScreenState
                     // PASO 2 — Detalles
                     _PasoDetalles(
                       activo: _pasoActual == 2,
-                      descripcionController: _descripcionController,
-                      referenciaController: _referenciaController,
-                      evidenciaController: _evidenciaController,
+                      tipoSeleccionado: _tipoSeleccionado,
+                      posicion: _posicion,
                     ),
                   ],
                 ),
@@ -301,7 +295,7 @@ class _StepIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const pasos = ['Tipo', 'Ubicación', 'Detalles'];
+    const pasos = ['Tipo', 'Ubicación', 'Confirmar'];
     return Container(
       color: AppTheme.surface,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -483,7 +477,6 @@ class _PasoUbicacion extends StatelessWidget {
       completado: completado,
       child: Column(
         children: [
-          // Estado GPS
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
@@ -529,8 +522,11 @@ class _PasoUbicacion extends StatelessWidget {
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.location_on_rounded,
-                                  color: AppTheme.success, size: 16),
+                              Icon(
+                                Icons.location_on_rounded,
+                                color: AppTheme.success,
+                                size: 16,
+                              ),
                               SizedBox(width: 6),
                               Text(
                                 'Ubicación obtenida',
@@ -561,6 +557,11 @@ class _PasoUbicacion extends StatelessWidget {
                               color: AppTheme.textSecondary,
                             ),
                           ),
+                          const SizedBox(height: 12),
+                          _MapaUbicacion(
+                            latitud: posicion!.latitude,
+                            longitud: posicion!.longitude,
+                          ),
                         ],
                       )
                     : Column(
@@ -568,8 +569,11 @@ class _PasoUbicacion extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.location_off_outlined,
-                                  color: AppTheme.error, size: 16),
+                              const Icon(
+                                Icons.location_off_outlined,
+                                color: AppTheme.error,
+                                size: 16,
+                              ),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
@@ -588,7 +592,6 @@ class _PasoUbicacion extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              // Reintentar
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: cargando ? null : onReintentar,
@@ -597,7 +600,9 @@ class _PasoUbicacion extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 44),
                     textStyle: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -611,7 +616,9 @@ class _PasoUbicacion extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(0, 44),
                       textStyle: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w700),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -627,117 +634,137 @@ class _PasoUbicacion extends StatelessWidget {
 // ── Paso 2 — Detalles ─────────────────────────────────────────────────────────
 class _PasoDetalles extends StatelessWidget {
   final bool activo;
-  final TextEditingController descripcionController;
-  final TextEditingController referenciaController;
-  final TextEditingController evidenciaController;
+  final String? tipoSeleccionado;
+  final Position? posicion;
 
   const _PasoDetalles({
     required this.activo,
-    required this.descripcionController,
-    required this.referenciaController,
-    required this.evidenciaController,
+    required this.tipoSeleccionado,
+    required this.posicion,
   });
 
   @override
   Widget build(BuildContext context) {
     return _PasoCard(
       numero: '03',
-      titulo: 'Detalles del problema',
-      subtitulo: 'Ayudá al taller a entender mejor la situación',
+      titulo: 'Confirmar solicitud',
+      subtitulo: 'Revisá los datos antes de enviar',
       activo: activo,
       completado: false,
       child: Column(
         children: [
-          EvTextField(
-            label: 'DESCRIPCIÓN DEL PROBLEMA',
-            hint: 'Ej: El motor hace un ruido extraño y el auto no arranca...',
-            controller: descripcionController,
-            validator: (v) {
-              if (v == null || v.trim().isEmpty) {
-                return 'Describí brevemente el problema';
-              }
-              if (v.trim().length < 10) {
-                return 'Mínimo 10 caracteres';
-              }
-              return null;
-            },
+          _ResumenItem(
+            icon: Icons.car_crash_outlined,
+            label: 'TIPO DE EMERGENCIA',
+            value: tipoSeleccionado?.toUpperCase() ?? 'NO SELECCIONADO',
           ),
-
-          const SizedBox(height: 16),
-
-          EvTextField(
-            label: 'REFERENCIA DE UBICACIÓN (opcional)',
-            hint: 'Ej: Frente al mercado, esquina con Av. Montes...',
-            controller: referenciaController,
+          const SizedBox(height: 12),
+          _ResumenItem(
+            icon: Icons.location_on_outlined,
+            label: 'UBICACIÓN',
+            value: posicion == null
+                ? 'NO DISPONIBLE'
+                : 'Lat: ${posicion!.latitude.toStringAsFixed(6)}\nLng: ${posicion!.longitude.toStringAsFixed(6)}',
           ),
-
-          const SizedBox(height: 8),
-
-          const Row(
-            children: [
-              Icon(
-                Icons.info_outline_rounded,
-                size: 13,
-                color: AppTheme.textSecondary,
+          const SizedBox(height: 12),
+          const _ResumenItem(
+            icon: Icons.priority_high_rounded,
+            label: 'PRIORIDAD',
+            value: 'MEDIA',
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: AppTheme.primary.withOpacity(0.18),
               ),
-              SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'La referencia ayuda al mecánico a encontrarte más rápido.',
-                  style: TextStyle(
-                    fontSize: 11,
+            ),
+            child: const Row(
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 16,
+                  color: AppTheme.primary,
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Se enviará tu emergencia con tu ubicación actual.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResumenItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _ResumenItem({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 18,
+            color: AppTheme.primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                     color: AppTheme.textSecondary,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
                     height: 1.4,
                   ),
                 ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          EvTextField(
-            label: 'URL DE EVIDENCIA',
-            hint: 'Ej: https://midominio.com/evidencia.jpg',
-            controller: evidenciaController,
-            keyboardType: TextInputType.url,
-            validator: (v) {
-              if (v == null || v.trim().isEmpty) {
-                return 'El backend exige al menos una evidencia';
-              }
-
-              final texto = v.trim();
-
-              if (!texto.startsWith('http://') &&
-                  !texto.startsWith('https://')) {
-                return 'Ingrese una URL válida';
-              }
-
-              return null;
-            },
-          ),
-
-          const SizedBox(height: 8),
-
-          const Row(
-            children: [
-              Icon(
-                Icons.link_rounded,
-                size: 13,
-                color: AppTheme.textSecondary,
-              ),
-              SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Por ahora el backend recibe evidencias como URLs. Luego se puede agregar subida de imágenes.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textSecondary,
-                    height: 1.4,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -866,6 +893,63 @@ class _PasoCard extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MapaUbicacion extends StatelessWidget {
+  final double latitud;
+  final double longitud;
+
+  const _MapaUbicacion({
+    required this.latitud,
+    required this.longitud,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final punto = LatLng(latitud, longitud);
+
+    return Container(
+      width: double.infinity,
+      height: 190,
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: FlutterMap(
+        options: MapOptions(
+          initialCenter: punto,
+          initialZoom: 16,
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.drag |
+                InteractiveFlag.pinchZoom |
+                InteractiveFlag.doubleTapZoom,
+          ),
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.example.emergencias_vehiculares',
+          ),
+          MarkerLayer(
+            markers: [
+              Marker(
+                point: punto,
+                width: 44,
+                height: 44,
+                child: const Icon(
+                  Icons.location_on_rounded,
+                  color: AppTheme.error,
+                  size: 36,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

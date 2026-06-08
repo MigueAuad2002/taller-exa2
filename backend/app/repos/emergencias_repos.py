@@ -9,9 +9,10 @@ def obtener_todas_las_emergencias():
     try:
         query = f"""
             SELECT nro_emergencia, tipo_emergencia, latitud, longitud, 
-                   fecha_inicio, fecha_fin, estado, prioridad, 
-                   nro_usuario, nro_taller, id_empresa
-            FROM {Config.SCHEMA}.emergencia
+            fecha_inicio, fecha_fin, a.estado, prioridad, 
+            a.nro_usuario, a.nro_taller, a.id_empresa,b.nombre_usuario
+            FROM {Config.SCHEMA}.emergencia a
+            INNER JOIN {Config.SCHEMA}.usuario b ON a.nro_usuario =b.nro_usuario 
             ORDER BY fecha_inicio DESC;
         """
         resultados = db.execute_query(query, fetchall=True)
@@ -30,7 +31,8 @@ def obtener_todas_las_emergencias():
                     "prioridad": r[7],
                     "nro_usuario": r[8],
                     "nro_taller": r[9],
-                    "id_empresa": r[10]
+                    "id_empresa": r[10],
+                    "nombre_usuario":r[11]
                 })
         return emergencias
     finally:

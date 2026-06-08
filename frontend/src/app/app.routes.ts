@@ -1,4 +1,6 @@
 import { Routes } from '@angular/router';
+
+//COMPONENTES
 import { LoginComponent } from './pages/login/login';
 import { ListaUsuariosComponent } from './pages/usuarios/lista-usuarios/lista-usuarios';
 import { HomeComponent } from './pages/home/home';
@@ -9,6 +11,7 @@ import { BackupComponent } from './pages/backup/backup';
 import { TalleresComponent } from './pages/talleres/talleres';
 import { MapaTalleresComponent } from './pages/mapa-talleres/mapa-talleres';
 import { ServiciosTallerComponent } from './pages/servicios-taller/servicios-taller';
+import { EmergenciasActualesComponent } from './pages/emergencias-actuales/emergencias-actuales';
 
 //LAYOUTS
 import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout';
@@ -16,6 +19,7 @@ import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout';
 //GUARDS
 import { publicGuard } from './guards/public-guard';
 import { authGuard } from './guards/auth-guard';
+
 
 
 
@@ -42,7 +46,8 @@ export const routes: Routes = [
             { path:'backup',component:BackupComponent },
             { path:'talleres', component: TalleresComponent },
             { path:'mapa-talleres', component: MapaTalleresComponent },
-            { path:'talleres/:id/servicios', component:ServiciosTallerComponent }  
+            { path:'talleres/:id/servicios', component:ServiciosTallerComponent },
+            { path:'emergencias-actuales',component: EmergenciasActualesComponent }
         ]
     },
     { path: '**', redirectTo: 'login' }

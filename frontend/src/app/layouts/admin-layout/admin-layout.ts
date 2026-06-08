@@ -1,7 +1,9 @@
-import { Component, OnInit, inject, PLATFORM_ID, HostListener } from '@angular/core';
+import { Component, OnInit, inject, PLATFORM_ID, HostListener, ChangeDetectorRef, NgZone, DestroyRef } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Router, RouterOutlet, RouterModule } from '@angular/router';
 import { AuthService } from '../../services/auth';
+import { NotificacionesService } from '../../services/notificaciones'; // <-- Asegúrate de que la ruta sea correcta
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-admin-layout',
@@ -11,14 +13,23 @@ import { AuthService } from '../../services/auth';
 })
 export class AdminLayoutComponent implements OnInit {
   private authService = inject(AuthService);
+  private notificacionesService = inject(NotificacionesService);
   private router = inject(Router);
   private platformId = inject(PLATFORM_ID);
+  private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone);
+  private destroyRef = inject(DestroyRef);
 
   usuarioActual: any = null;
   modoOscuro: boolean = false;
   
   sidebarAbierto: boolean = false; 
   sidebarColapsado: boolean = false; 
+
+  // --- VARIABLES DE NOTIFICACIONES ---
+  mostrarNotificaciones: boolean = false;
+  listaNotificaciones: any[] = [];
+  cantidadNoLeidas: number = 0;
 
   menuNavegacion = [
     {
@@ -75,7 +86,21 @@ export class AdminLayoutComponent implements OnInit {
         document.documentElement.classList.add('dark');
       }
 
-      this.verificarResolucion(); // Corregir estado inicial según la pantalla
+      this.verificarResolucion();
+
+      // --- INICIAR CONEXIÓN WEBSOCKET ---
+      this.notificacionesService.conectar();
+
+      // Escuchar las notificaciones entrantes en tiempo real
+      this.notificacionesService.notificaciones$
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((notis) => {
+          this.ngZone.run(() => {
+            this.listaNotificaciones = notis;
+            this.cantidadNoLeidas = notis.filter(n => !n.leida).length;
+            this.cdr.detectChanges(); // Forzamos el render para que el punto rojo aparezca
+          });
+        });
     }
   }
 
@@ -90,17 +115,25 @@ export class AdminLayoutComponent implements OnInit {
   verificarResolucion() {
     const isDesktop = window.innerWidth >= 768;
     if (isDesktop && this.sidebarAbierto) {
-      this.sidebarAbierto = false; // Cierra el modo móvil si agranda la pantalla
+      this.sidebarAbierto = false; 
+    }
+  }
+
+  // --- BOTÓN PARA ABRIR/CERRAR NOTIFICACIONES ---
+  toggleNotificaciones() {
+    this.mostrarNotificaciones = !this.mostrarNotificaciones;
+    if (this.mostrarNotificaciones && this.cantidadNoLeidas > 0) {
+      this.notificacionesService.marcarComoLeidas();
+      this.cantidadNoLeidas = 0;
+      this.cdr.detectChanges();
     }
   }
 
   toggleSidebar() {
     if (isPlatformBrowser(this.platformId)) {
       if (window.innerWidth < 768) {
-        // Móvil: desliza
         this.sidebarAbierto = !this.sidebarAbierto;
       } else {
-        // PC: Colapsa
         this.sidebarColapsado = !this.sidebarColapsado;
         if (this.sidebarColapsado) {
           this.menuFiltrado.forEach(m => m.expandido = false);
@@ -134,6 +167,7 @@ export class AdminLayoutComponent implements OnInit {
   }
 
   cerrarSesion() {
+    this.notificacionesService.desconectar(); // Importante: cortar WS al salir
     this.authService.cerrarSesion();
     this.router.navigate(['/login']);
   }

@@ -9,16 +9,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Estado
   provider: ^6.1.2
-  # HTTP
   dio: ^5.4.3
-  # Almacenamiento seguro (tokens JWT)
   flutter_secure_storage: ^9.0.0
-  # GPS
   geolocator: ^12.0.0
-  # UI helpers
   gap: ^3.0.1
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
 
 dev_dependencies:
   flutter_test:
