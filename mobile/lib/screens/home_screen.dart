@@ -9,6 +9,10 @@ import 'mis_emergencias_screen.dart';
 import 'perfil_screen.dart';
 import 'vehiculos_screen.dart';
 import '../services/notificacion_ws_service.dart';
+import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import '../services/pending_emergencia_service.dart';
+import '../services/emergencia_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,6 +28,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final NotificacionWsService _wsService = NotificacionWsService();
   bool _wsActivo = false;
 
+  StreamSubscription? _conexionSub;
+  int _emergenciasPendientes = 0;
+  bool _sincronizandoPendientes = false;
+
   @override
   void initState() {
     super.initState();
@@ -31,7 +39,137 @@ class _HomeScreenState extends State<HomeScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _iniciarWebSocket();
+      _cargarPendientes();
+      _escucharConexion();
     });
+
+    
+  }
+
+  Future<void> _cargarPendientes() async {
+    final total = await PendingEmergenciaService().contar();
+
+    if (!mounted) return;
+
+    setState(() {
+      _emergenciasPendientes = total;
+    });
+  }
+
+  bool _hayConexionDesdeEvento(dynamic event) {
+    if (event is List<ConnectivityResult>) {
+      return !event.contains(ConnectivityResult.none);
+    }
+
+    if (event is ConnectivityResult) {
+      return event != ConnectivityResult.none;
+    }
+
+    return false;
+  }
+
+  void _escucharConexion() {
+    _conexionSub = Connectivity().onConnectivityChanged.listen((event) async {
+      final conectado = _hayConexionDesdeEvento(event);
+
+      if (conectado) {
+        await _sincronizarPendientes();
+        await _reconectarWebSocket();
+      }
+    });
+  }
+
+  Future<void> _sincronizarPendientes() async {
+    if (_sincronizandoPendientes) return;
+
+    setState(() {
+      _sincronizandoPendientes = true;
+    });
+
+    final store = PendingEmergenciaService();
+    final pendientes = await store.listar();
+
+    int enviadas = 0;
+
+    for (final item in pendientes) {
+      try {
+        final payload = Map<String, dynamic>.from(item['payload']);
+
+        await EmergenciaService().crearEmergenciaDesdePayload(payload);
+
+        await store.eliminarPorLocalId(item['local_id'].toString());
+
+        enviadas++;
+      } catch (_) {
+        break;
+      }
+    }
+
+    await _cargarPendientes();
+
+    if (!mounted) return;
+
+    setState(() {
+      _sincronizandoPendientes = false;
+    });
+
+    if (enviadas > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$enviadas emergencia${enviadas == 1 ? '' : 's'} pendiente${enviadas == 1 ? '' : 's'} enviada${enviadas == 1 ? '' : 's'}.',
+          ),
+          backgroundColor: AppTheme.success,
+        ),
+      );
+    }
+  }
+
+  Future<void> _reconectarWebSocket() async {
+    await _wsService.reconectar(
+      onEstado: (activo) {
+        if (!mounted) return;
+
+        setState(() {
+          _wsActivo = activo;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              activo ? 'WebSocket activado.' : 'WebSocket desactivado.',
+            ),
+            backgroundColor: activo ? AppTheme.success : AppTheme.error,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+      onMensaje: (mensaje) {
+        if (!mounted) return;
+
+        final titulo = mensaje['titulo']?.toString() ?? 'Notificación';
+        final cuerpo = mensaje['cuerpo']?.toString() ?? 'Mensaje recibido.';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$titulo\n$cuerpo'),
+            backgroundColor: AppTheme.primary,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      },
+      onError: (error) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error WebSocket: $error'),
+            backgroundColor: AppTheme.error,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _cargarDatosUsuario() async {
@@ -150,6 +288,7 @@ class _HomeScreenState extends State<HomeScreen> {
   
   @override
   void dispose() {
+    _conexionSub?.cancel();
     _wsService.desconectar();
     super.dispose();
   }
@@ -203,16 +342,29 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   //const SizedBox(height: 24),
                   const SizedBox(height: 10),
-                  _WsStatusChip(activo: _wsActivo),
+                  _WsStatusPanel(
+                    activo: _wsActivo,
+                    pendientes: _emergenciasPendientes,
+                    sincronizando: _sincronizandoPendientes,
+                    onReconectar: _reconectarWebSocket,
+                    onSincronizar: _sincronizarPendientes,
+                  ),
 
                   // ── Botón SOS destacado ─────────────────────────────
                   _SosButton(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SolicitarEmergenciaScreen(),
-                      ),
-                    ),
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SolicitarEmergenciaScreen(),
+                        ),
+                      );
+
+                      if (!mounted) return;
+
+                      await _cargarPendientes();
+                      await _sincronizarPendientes();
+                    },
                   ),
                   const SizedBox(height: 20),
 
@@ -636,6 +788,157 @@ class _WsStatusChip extends StatelessWidget {
               fontWeight: FontWeight.w700,
               color: color,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WsStatusPanel extends StatelessWidget {
+  final bool activo;
+  final int pendientes;
+  final bool sincronizando;
+  final VoidCallback onReconectar;
+  final VoidCallback onSincronizar;
+
+  const _WsStatusPanel({
+    required this.activo,
+    required this.pendientes,
+    required this.sincronizando,
+    required this.onReconectar,
+    required this.onSincronizar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final wsColor = activo ? AppTheme.success : AppTheme.error;
+    final pendingColor = pendientes > 0 ? AppTheme.primary : AppTheme.success;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: wsColor.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  activo
+                      ? Icons.wifi_tethering_rounded
+                      : Icons.wifi_off_rounded,
+                  size: 20,
+                  color: wsColor,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      activo ? 'TIEMPO REAL ACTIVO' : 'TIEMPO REAL INACTIVO',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: wsColor,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Canal WebSocket de notificaciones',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onReconectar,
+                icon: const Icon(Icons.refresh_rounded, size: 15),
+                label: const Text(
+                  'Reconectar',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: pendingColor.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  pendientes > 0
+                      ? Icons.cloud_upload_outlined
+                      : Icons.cloud_done_outlined,
+                  size: 20,
+                  color: pendingColor,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$pendientes EMERGENCIA${pendientes == 1 ? '' : 'S'} PENDIENTE${pendientes == 1 ? '' : 'S'}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: pendingColor,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      pendientes > 0
+                          ? 'Hay solicitudes guardadas localmente'
+                          : 'No hay solicitudes pendientes por enviar',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed:
+                    pendientes == 0 || sincronizando ? null : onSincronizar,
+                child: Text(
+                  sincronizando ? 'Enviando...' : 'Enviar',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

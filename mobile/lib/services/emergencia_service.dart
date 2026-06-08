@@ -9,24 +9,30 @@ class EmergenciaService {
     required double latitud,
     required double longitud,
     required int nroVehiculo,
-    required List<String> evidencias,
+    required List<Map<String, dynamic>> evidencias,
     String prioridad = 'MEDIA',
     String descripcion = '',
     String referencia = '',
   }) async {
+    return crearEmergenciaDesdePayload({
+      'tipo_emergencia': tipoEmergencia,
+      'latitud': latitud,
+      'longitud': longitud,
+      'prioridad': prioridad,
+      'nro_vehiculo': nroVehiculo,
+      'evidencias': evidencias,
+      'descripcion': descripcion,
+      'referencia': referencia,
+    });
+  }
+
+  Future<Map<String, dynamic>> crearEmergenciaDesdePayload(
+    Map<String, dynamic> payload,
+  ) async {
     try {
       final response = await ApiClient.dio.post(
         '$_basePath/',
-        data: {
-          'tipo_emergencia': tipoEmergencia,
-          'latitud': latitud,
-          'longitud': longitud,
-          'prioridad': prioridad,
-          'nro_vehiculo': nroVehiculo,
-          'evidencias': evidencias,
-          'descripcion': descripcion,
-          'referencia': referencia,
-        },
+        data: payload,
       );
 
       final data = response.data;

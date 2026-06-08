@@ -3,6 +3,7 @@ from app.repos import emergencias_repos
 from app.services import notificaciones_services
 
 #FUNCIONES DE LECTURA (GET)
+
 def listar_todas_las_emergencias():
     emergencias = emergencias_repos.obtener_todas_las_emergencias()
     return {"success": True, "message": "Emergencias recuperadas exitosamente", "data": emergencias}
@@ -18,6 +19,7 @@ def listar_emergencias_mi_taller(nro_usuario: int):
     return {"success": True, "message": "Emergencias del taller del mecánico recuperadas exitosamente", "data": emergencias}
 
 #FUNCIONES DE ESCRITURA CON NOTIFICACIONES
+
 def normalizar_rol(rol_usuario: str):
     return rol_usuario.strip().upper() if rol_usuario else ""
 
@@ -27,11 +29,6 @@ def registrar_emergencia(data: dict, token_data: dict, background_tasks: Backgro
     latitud = data.get('latitud')
     longitud = data.get('longitud')
     prioridad = data.get('prioridad', 'MEDIA')
-    
-    #SI MANDAN LA LLAVE PERO VACIA RECLAMAMOS
-    nro_vehiculo = data.get('nro_vehiculo', None)
-    if 'nro_vehiculo' in data and not nro_vehiculo:
-        raise ValueError("Si provee la llave 'nro_vehiculo', no puede estar vacía.")
     
     #VALIDACIONES POR ROL
     if rol == 'ADMINISTRADOR':
@@ -47,14 +44,18 @@ def registrar_emergencia(data: dict, token_data: dict, background_tasks: Backgro
         raise ValueError("Rol no autorizado para crear emergencias.")
 
     nuevo_id = emergencias_repos.crear_emergencia_db(
-        tipo_emergencia.upper(), latitud, longitud, 'PENDIENTE', prioridad.upper(), nro_usuario, nro_vehiculo
+        tipo_emergencia.upper(), latitud, longitud, 'PENDIENTE', prioridad.upper(), nro_usuario
     )
 
+    #PROCESAR EVIDENCIAS BASE64 AL CREAR
     if rol == 'CLIENTE' and data.get('evidencias'):
-        for url in data.get('evidencias'):
-            emergencias_repos.agregar_evidencia_db(nuevo_id, url)
+        for ev in data.get('evidencias'):
+            tipo = ev.get('tipo_archivo', 'IMAGEN')
+            base64_string = ev.get('base64', '')
+            if base64_string:
+                emergencias_repos.agregar_evidencia_db(nuevo_id, tipo.upper(), base64_string)
 
-    #DISPARAR NOTIFICACIÓN EN SEGUNDO PLANO
+    #DISPARAR NOTIFICACION EN SEGUNDO PLANO
     background_tasks.add_task(
         notificaciones_services.enviar_push_nueva_emergencia, 
         nuevo_id, 
@@ -83,13 +84,22 @@ def actualizar_emergencia(nro_emergencia: int, data: dict, token_data: dict):
         if not estado: raise ValueError("Mecánico solo puede actualizar el 'estado'.")
         emergencias_repos.actualizar_estado_emergencia_db(nro_emergencia, estado.upper())
     
+    #PROCESAR EVIDENCIAS BASE64 AL ACTUALIZAR
     elif rol == 'CLIENTE':
         if emergencia['nro_usuario'] != token_data.get('nro_usuario'):
             raise ValueError("No puedes modificar emergencias de otros.")
+            
         añadir = data.get('añadir_evidencias', [])
         eliminar = data.get('eliminar_evidencias', [])
-        for url in añadir: emergencias_repos.agregar_evidencia_db(nro_emergencia, url)
-        for id_ev in eliminar: emergencias_repos.eliminar_evidencia_db(id_ev)
+        
+        for ev in añadir: 
+            tipo = ev.get('tipo_archivo', 'IMAGEN')
+            base64_string = ev.get('base64', '')
+            if base64_string:
+                emergencias_repos.agregar_evidencia_db(nro_emergencia, tipo.upper(), base64_string)
+                
+        for id_ev in eliminar: 
+            emergencias_repos.eliminar_evidencia_db(id_ev)
     
     return {"success": True, "message": "Emergencia actualizada correctamente."}
 

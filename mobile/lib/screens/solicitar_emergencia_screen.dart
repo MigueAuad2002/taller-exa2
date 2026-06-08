@@ -8,6 +8,14 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../services/vehiculo_service.dart';
 import 'vehiculos_screen.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import '../services/pending_emergencia_service.dart';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:image_picker/image_picker.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 
 // Tipos de emergencia disponibles
 const _tiposEmergencia = [
@@ -72,6 +80,13 @@ class _SolicitarEmergenciaScreenState
   bool _cargandoVehiculos = false;
   String? _errorVehiculos;
 
+  final ImagePicker _imagePicker = ImagePicker();
+  final AudioRecorder _audioRecorder = AudioRecorder();
+
+  List<Map<String, dynamic>> _evidencias = [];
+
+  bool _grabandoAudio = false;
+
   @override
   void initState() {
     super.initState();
@@ -81,7 +96,241 @@ class _SolicitarEmergenciaScreenState
 
   @override
   void dispose() {
+    _audioRecorder.dispose();
     super.dispose();
+  }
+
+  Future<bool> _hayConexion() async {
+    final result = await Connectivity().checkConnectivity();
+
+    if (result is List<ConnectivityResult>) {
+      return !result.contains(ConnectivityResult.none);
+    }
+
+    return result != ConnectivityResult.none;
+  }
+
+  Future<void> _agregarImagenDesdeCamara() async {
+    try {
+      final imagen = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 45,
+        maxWidth: 1280,
+      );
+
+      if (imagen == null) return;
+
+      final bytes = await File(imagen.path).readAsBytes();
+      final base64String = base64Encode(bytes);
+
+      setState(() {
+        _evidencias.add({
+          'tipo_archivo': 'IMAGEN',
+          'base64': base64String,
+          'nombre': imagen.name,
+        });
+      });
+
+      _mostrarInfo('Imagen agregada correctamente.');
+    } catch (e) {
+      _mostrarError('No se pudo cargar la imagen.');
+    }
+  }
+
+  Future<void> _agregarImagenDesdeGaleria() async {
+    try {
+      final imagen = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 45,
+        maxWidth: 1280,
+      );
+
+      if (imagen == null) return;
+
+      final bytes = await File(imagen.path).readAsBytes();
+      final base64String = base64Encode(bytes);
+
+      setState(() {
+        _evidencias.add({
+          'tipo_archivo': 'IMAGEN',
+          'base64': base64String,
+          'nombre': imagen.name,
+        });
+      });
+
+      _mostrarInfo('Imagen agregada correctamente.');
+    } catch (e) {
+      _mostrarError('No se pudo cargar la imagen.');
+    }
+  }
+
+  Future<void> _iniciarGrabacionAudio() async {
+    try {
+      final tienePermiso = await _audioRecorder.hasPermission();
+
+      if (!tienePermiso) {
+        _mostrarError('Se necesita permiso de micrófono.');
+        return;
+      }
+
+      final dir = await getTemporaryDirectory();
+
+      final path =
+          '${dir.path}/evidencia_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      await _audioRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 64000,
+          sampleRate: 44100,
+        ),
+        path: path,
+      );
+
+      setState(() {
+        _grabandoAudio = true;
+      });
+    } catch (e) {
+      _mostrarError('No se pudo iniciar la grabación.');
+    }
+  }
+
+  Future<void> _detenerGrabacionAudio() async {
+    try {
+      final path = await _audioRecorder.stop();
+
+      setState(() {
+        _grabandoAudio = false;
+      });
+
+      if (path == null) return;
+
+      final bytes = await File(path).readAsBytes();
+      final base64String = base64Encode(bytes);
+
+      setState(() {
+        _evidencias.add({
+          'tipo_archivo': 'AUDIO',
+          'base64': base64String,
+          'nombre': path.split('/').last,
+        });
+      });
+
+      _mostrarInfo('Audio agregado correctamente.');
+    } catch (e) {
+      setState(() {
+        _grabandoAudio = false;
+      });
+
+      _mostrarError('No se pudo guardar el audio.');
+    }
+  }
+
+  void _eliminarEvidencia(int index) {
+    setState(() {
+      _evidencias.removeAt(index);
+    });
+  }
+
+  void _mostrarInfo(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: AppTheme.success,
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _evidenciasParaEnviar() {
+    if (_evidencias.isEmpty) {
+      return const [
+        {
+          'tipo_archivo': 'SIN_EVIDENCIA',
+          'base64': '',
+        }
+      ];
+    }
+
+    return _evidencias
+        .map((e) => {
+              'tipo_archivo': e['tipo_archivo'],
+              'base64': e['base64'],
+            })
+        .toList();
+  }
+
+
+  bool _esErrorDeConexion(String mensaje) {
+    final m = mensaje.toLowerCase();
+
+    return m.contains('conexión') ||
+        m.contains('conexion') ||
+        m.contains('tiempo de espera') ||
+        m.contains('timeout') ||
+        m.contains('connection') ||
+        m.contains('socket');
+  }
+
+  Future<void> _guardarEmergenciaPendiente(Map<String, dynamic> payload) async {
+    await PendingEmergenciaService().guardar(payload);
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        contentPadding: const EdgeInsets.all(26),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.cloud_off_rounded,
+                color: AppTheme.primary,
+                size: 30,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Emergencia guardada',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'No hay conexión estable. La solicitud se enviará automáticamente cuando vuelva internet.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 22),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: const Text('VOLVER AL INICIO'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── GPS ────────────────────────────────────────────────────────────────
@@ -172,27 +421,47 @@ class _SolicitarEmergenciaScreenState
       return;
     }
 
+    final payload = {
+      'tipo_emergencia': _tipoSeleccionado!,
+      'latitud': _latitudSeleccionada!,
+      'longitud': _longitudSeleccionada!,
+      'nro_vehiculo': int.parse(
+        _vehiculoSeleccionado!['nro_vehiculo'].toString(),
+      ),
+      'prioridad': 'MEDIA',
+      'descripcion': '',
+      'referencia': '',
+      'evidencias': _evidenciasParaEnviar(),
+    };
+
     setState(() => _enviando = true);
 
     try {
-      final resultado = await EmergenciaService().crearEmergencia(
-        tipoEmergencia: _tipoSeleccionado!,
-        latitud: _latitudSeleccionada!,
-        longitud: _longitudSeleccionada!,
-        nroVehiculo: int.parse(
-          _vehiculoSeleccionado!['nro_vehiculo'].toString(),
-        ),
-        prioridad: 'MEDIA',
-        descripcion: '',
-        referencia: '',
-        evidencias: const ['SIN_EVIDENCIA_MOVIL'],
+      final conectado = await _hayConexion();
+
+      if (!conectado) {
+        await _guardarEmergenciaPendiente(payload);
+        return;
+      }
+
+      final resultado = await EmergenciaService().crearEmergenciaDesdePayload(
+        payload,
       );
 
       if (!mounted) return;
+
       _mostrarExito(resultado['nro_emergencia']);
     } catch (e) {
       if (!mounted) return;
-      _mostrarError(e.toString().replaceAll('Exception: ', ''));
+
+      final mensaje = e.toString().replaceAll('Exception: ', '');
+
+      if (_esErrorDeConexion(mensaje)) {
+        await _guardarEmergenciaPendiente(payload);
+        return;
+      }
+
+      _mostrarError(mensaje);
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
@@ -355,6 +624,12 @@ class _SolicitarEmergenciaScreenState
                       latitudSeleccionada: _latitudSeleccionada,
                       longitudSeleccionada: _longitudSeleccionada,
                       vehiculoSeleccionado: _vehiculoSeleccionado,
+                      evidencias: _evidencias,
+                      grabandoAudio: _grabandoAudio,
+                      onCamara: _agregarImagenDesdeCamara,
+                      onGaleria: _agregarImagenDesdeGaleria,
+                      onAudio: _grabandoAudio ? _detenerGrabacionAudio : _iniciarGrabacionAudio,
+                      onEliminarEvidencia: _eliminarEvidencia,
                     ),
                   ],
                 ),
@@ -1081,6 +1356,12 @@ class _PasoDetalles extends StatelessWidget {
   final Map<String, dynamic>? vehiculoSeleccionado;
   final double? latitudSeleccionada;
   final double? longitudSeleccionada;
+  final List<Map<String, dynamic>> evidencias;
+  final bool grabandoAudio;
+  final VoidCallback onCamara;
+  final VoidCallback onGaleria;
+  final VoidCallback onAudio;
+  final void Function(int) onEliminarEvidencia;
 
   const _PasoDetalles({
     required this.activo,
@@ -1088,7 +1369,13 @@ class _PasoDetalles extends StatelessWidget {
     required this.posicion,
     required this.vehiculoSeleccionado,
     required this.latitudSeleccionada,
-    required this.longitudSeleccionada
+    required this.longitudSeleccionada,
+    required this.evidencias,
+    required this.grabandoAudio,
+    required this.onCamara,
+    required this.onGaleria,
+    required this.onAudio,
+    required this.onEliminarEvidencia,
   });
 
   String _texto(dynamic valor) {
@@ -1133,6 +1420,15 @@ class _PasoDetalles extends StatelessWidget {
             icon: Icons.priority_high_rounded,
             label: 'PRIORIDAD',
             value: 'MEDIA',
+          ),
+          const SizedBox(height: 12),
+          _EvidenciasBox(
+            evidencias: evidencias,
+            grabandoAudio: grabandoAudio,
+            onCamara: onCamara,
+            onGaleria: onGaleria,
+            onAudio: onAudio,
+            onEliminar: onEliminarEvidencia,
           ),
           const SizedBox(height: 14),
           Container(
@@ -1430,4 +1726,182 @@ class _TipoEmergencia {
   final IconData icon;
   const _TipoEmergencia(
       {required this.valor, required this.label, required this.icon});
+}
+
+class _EvidenciasBox extends StatelessWidget {
+  final List<Map<String, dynamic>> evidencias;
+  final bool grabandoAudio;
+  final VoidCallback onCamara;
+  final VoidCallback onGaleria;
+  final VoidCallback onAudio;
+  final void Function(int) onEliminar;
+
+  const _EvidenciasBox({
+    required this.evidencias,
+    required this.grabandoAudio,
+    required this.onCamara,
+    required this.onGaleria,
+    required this.onAudio,
+    required this.onEliminar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.attach_file_rounded,
+                size: 18,
+                color: AppTheme.primary,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'EVIDENCIAS OPCIONALES',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textSecondary,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Puedes adjuntar una foto o grabar un audio para ayudar al taller.',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppTheme.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onCamara,
+                  icon: const Icon(Icons.photo_camera_outlined, size: 16),
+                  label: const Text('Cámara'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 42),
+                    textStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onGaleria,
+                  icon: const Icon(Icons.image_outlined, size: 16),
+                  label: const Text('Galería'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 42),
+                    textStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onAudio,
+            icon: Icon(
+              grabandoAudio
+                  ? Icons.stop_circle_outlined
+                  : Icons.mic_none_outlined,
+              size: 16,
+            ),
+            label: Text(
+              grabandoAudio ? 'Detener grabación' : 'Grabar audio',
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: grabandoAudio ? AppTheme.error : AppTheme.primary,
+              side: BorderSide(
+                color: grabandoAudio ? AppTheme.error : AppTheme.primary,
+                width: 1.2,
+              ),
+              minimumSize: const Size(double.infinity, 42),
+              textStyle: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          if (evidencias.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Column(
+              children: List.generate(evidencias.length, (index) {
+                final evidencia = evidencias[index];
+                final tipo = evidencia['tipo_archivo']?.toString() ?? '';
+                final nombre = evidencia['nombre']?.toString() ?? 'Evidencia';
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surface,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        tipo == 'AUDIO'
+                            ? Icons.audiotrack_rounded
+                            : Icons.image_outlined,
+                        size: 18,
+                        color: AppTheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '$tipo · $nombre',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => onEliminar(index),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: AppTheme.error,
+                        ),
+                        constraints: const BoxConstraints(),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
