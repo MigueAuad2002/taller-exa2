@@ -84,47 +84,93 @@ def actualizar_emergencia(nro_emergencia: int, data: dict, token_data: dict):
     if not emergencia:
         raise ValueError("La emergencia no existe.")
 
+    estado_actual = normalizar_rol(emergencia.get('estado'))
+    estado_nuevo = normalizar_rol(data.get('estado'))
+
+    estados_cerrados = ['CANCELADA', 'FINALIZADA', 'COMPLETADA']
+
+    if estado_actual in estados_cerrados:
+        raise ValueError("No se puede modificar una emergencia que ya fue cerrada.")
+
     if rol == 'ADMINISTRADOR':
         estado = data.get('estado')
-        añadir = data.get('añadir_evidencias',[])
-        if not estado and not añadir: 
+        añadir = data.get('añadir_evidencias', [])
+
+        if not estado and not añadir:
             raise ValueError("Admin: debe actualizar el 'estado' o cargar 'evidencias'.")
-        
+
         if estado:
-            emergencias_repos.actualizar_estado_emergencia_db(nro_emergencia, estado.upper())
-            
+            emergencias_repos.actualizar_estado_emergencia_db(
+                nro_emergencia,
+                estado.upper()
+            )
+
         if añadir:
-            for ev in añadir: 
+            for ev in añadir:
                 tipo = ev.get('tipo_archivo', 'IMAGEN')
                 base64_string = ev.get('base64', '')
+
                 if base64_string:
-                    emergencias_repos.agregar_evidencia_db(nro_emergencia, tipo.upper(), base64_string)
-    
+                    emergencias_repos.agregar_evidencia_db(
+                        nro_emergencia,
+                        tipo.upper(),
+                        base64_string
+                    )
+
     elif rol in ['MECANICO', 'MECÁNICO', 'TECNICO', 'TÉCNICO']:
         if emergencia['nro_taller'] != nro_taller_token:
             raise ValueError("Acceso Denegado: Emergencia no asignada a tu taller.")
+
         estado = data.get('estado')
-        if not estado: raise ValueError("Mecánico: solo puede actualizar el 'estado'.")
-        emergencias_repos.actualizar_estado_emergencia_db(nro_emergencia, estado.upper())
-    
-    #PROCESAR EVIDENCIAS BASE64 AL ACTUALIZAR
+
+        if not estado:
+            raise ValueError("Mecánico: solo puede actualizar el 'estado'.")
+
+        emergencias_repos.actualizar_estado_emergencia_db(
+            nro_emergencia,
+            estado.upper()
+        )
+
     elif rol == 'CLIENTE':
         if emergencia['nro_usuario'] != token_data.get('nro_usuario'):
             raise ValueError("No puedes modificar emergencias de otros.")
-            
+
         añadir = data.get('añadir_evidencias', [])
         eliminar = data.get('eliminar_evidencias', [])
-        
-        for ev in añadir: 
+
+        if estado_nuevo and estado_nuevo != 'CANCELADA':
+            raise ValueError("Cliente: solo puede cancelar la emergencia.")
+
+        if not estado_nuevo and not añadir and not eliminar:
+            raise ValueError("Cliente: debe cancelar la emergencia o modificar evidencias.")
+
+        if estado_nuevo == 'CANCELADA':
+            emergencias_repos.actualizar_estado_emergencia_db(
+                nro_emergencia,
+                'CANCELADA'
+            )
+
+        for ev in añadir:
             tipo = ev.get('tipo_archivo', 'IMAGEN')
             base64_string = ev.get('base64', '')
+
             if base64_string:
-                emergencias_repos.agregar_evidencia_db(nro_emergencia, tipo.upper(), base64_string)
-                
-        for id_ev in eliminar: 
+                emergencias_repos.agregar_evidencia_db(
+                    nro_emergencia,
+                    tipo.upper(),
+                    base64_string
+                )
+
+        for id_ev in eliminar:
             emergencias_repos.eliminar_evidencia_db(id_ev)
-    
-    return {"success": True, "message": "Emergencia actualizada correctamente."}
+
+    else:
+        raise ValueError("Rol no autorizado para actualizar emergencias.")
+
+    return {
+        "success": True,
+        "message": "Emergencia actualizada correctamente."
+    }
 
 def borrar_emergencia(nro_emergencia: int, token_data: dict):
     rol = normalizar_rol(token_data.get('nombre_rol'))

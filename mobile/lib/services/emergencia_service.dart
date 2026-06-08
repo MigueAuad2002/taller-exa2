@@ -237,4 +237,31 @@ class EmergenciaService {
     }
   }
 
+  Future<Map<String, dynamic>> cancelarEmergencia({
+    required int nroEmergencia,
+  }) async {
+    try {
+      final response = await ApiClient.dio.put(
+        '$_basePath/$nroEmergencia',
+        data: {
+          'estado': 'CANCELADA',
+        },
+      );
+
+      final data = response.data;
+
+      if (data is! Map) {
+        throw Exception('Respuesta inválida del servidor.');
+      }
+
+      if (data['success'] != true) {
+        throw Exception(data['message'] ?? 'No se pudo cancelar la emergencia.');
+      }
+
+      return Map<String, dynamic>.from(data);
+    } on DioException catch (e) {
+      throw Exception(_parsearErrorDio(e));
+    }
+  }
+
 }
