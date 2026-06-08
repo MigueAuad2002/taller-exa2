@@ -110,30 +110,48 @@ class AuthService {
   }
 
   // ── Parser de errores Dio ──────────────────────────────────────────────
-  // FastAPI devuelve los errores en response.data['detail']
+  // FastAPI siempre devuelve errores en response.data['detail']
   String _parsearErrorDio(DioException e) {
-    if (e.response != null) {
-      final detail = e.response?.data?['detail'];
-      if (detail != null) return detail.toString();
+    // Primero intentamos leer el 'detail' que manda FastAPI
+    if (e.response?.data != null) {
+      final data = e.response!.data;
 
-      switch (e.response?.statusCode) {
-        case 400:
-          return 'Petición inválida. Revisá los datos ingresados.';
-        case 401:
-          return e.response?.data?['detail'] ?? 'Credenciales incorrectas.';
-        case 500:
-          return 'Error interno del servidor. Intentá más tarde.';
-        default:
-          return 'Error ${e.response?.statusCode}: ${e.response?.statusMessage}';
+      // Caso normal: { "detail": "mensaje del backend" }
+      if (data is Map && data['detail'] != null) {
+        return data['detail'].toString();
+      }
+
+      // Caso raro: FastAPI manda detail como lista de validaciones
+      if (data is Map && data['detail'] is List) {
+        final errores = data['detail'] as List;
+        return errores.map((e) => e['msg'] ?? e.toString()).join('\n');
       }
     }
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout) {
-      return 'Tiempo de espera agotado. Verificá tu conexión.';
+
+    // Errores de red (sin respuesta del servidor)
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.sendTimeout:
+        return 'Tiempo de espera agotado. Verificá tu conexión a internet.';
+      case DioExceptionType.connectionError:
+        return 'No se pudo conectar al servidor. Verificá tu conexión.';
+      default:
+        break;
     }
-    if (e.type == DioExceptionType.connectionError) {
-      return 'No se pudo conectar al servidor. Verificá que el backend esté corriendo.';
+
+    // Fallback por código HTTP
+    switch (e.response?.statusCode) {
+      case 400:
+        return 'Datos inválidos. Revisá el formulario.';
+      case 401:
+        return 'Credenciales incorrectas.';
+      case 404:
+        return 'Servicio no encontrado.';
+      case 500:
+        return 'Error interno del servidor. Intentá más tarde.';
+      default:
+        return 'Ocurrió un error inesperado. Intentá de nuevo.';
     }
-    return 'Error de red: ${e.message}';
   }
 }
