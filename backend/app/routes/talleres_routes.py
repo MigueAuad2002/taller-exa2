@@ -6,7 +6,7 @@ from app.utils.security import verificar_token
 router = APIRouter(tags=["Talleres"])
 
 #LISTA DE ROLES AUTORIZADOS A ESTE MODULO
-ROLES_PERMITIDOS = ['ADMINISTRADOR', 'GERENTE TALLER']
+ROLES_PERMITIDOS = ['ADMINISTRADOR', 'GERENTE TALLER','CLIENTE']
 
 def validar_rol_taller(rol_usuario: str):
     if rol_usuario not in ROLES_PERMITIDOS:

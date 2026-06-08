@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../theme/app_theme.dart';
 import '../services/routing_service.dart';
+import '../services/taller_service.dart';
 
 class TrackingEmergenciaScreen extends StatefulWidget {
   final Map<String, dynamic> emergencia;
@@ -32,56 +33,76 @@ class _TrackingEmergenciaScreenState extends State<TrackingEmergenciaScreen> {
     _cargarTrackingInicial();
   }
 
-  void _cargarTrackingInicial() {
+  Future<void> _cargarTrackingInicial() async {
     final latCliente = _double(widget.emergencia['latitud']);
     final lngCliente = _double(widget.emergencia['longitud']);
 
     if (latCliente == null || lngCliente == null) {
-        return;
+      return;
     }
 
     final puntoCliente = LatLng(latCliente, lngCliente);
-    final puntoAuxilioReal = _leerPuntoAuxilioDesdeEmergencia();
 
-    final puntoAuxilio = puntoAuxilioReal ??
-        LatLng(
-            puntoCliente.latitude + 0.012,
-            puntoCliente.longitude + 0.010,
-        );
+    final puntoAuxilioDesdeEmergencia = _leerPuntoAuxilioDesdeEmergencia();
+    final puntoAuxilioDesdeTaller = await _leerPuntoAuxilioDesdeTaller();
+
+    final puntoAuxilio = puntoAuxilioDesdeEmergencia ?? puntoAuxilioDesdeTaller;
+
+    if (!mounted) return;
+
+    if (puntoAuxilio == null) {
+      setState(() {
+        _cliente = puntoCliente;
+        _auxilio = null;
+        _trackingSimulado = false;
+        _ruta = [];
+      });
+
+      return;
+    }
 
     setState(() {
-        _cliente = puntoCliente;
-        _auxilio = puntoAuxilio;
-        _trackingSimulado = puntoAuxilioReal == null;
-        _ruta = [puntoAuxilio, puntoCliente];
+      _cliente = puntoCliente;
+      _auxilio = puntoAuxilio;
+      _trackingSimulado = false;
+      _ruta = [puntoAuxilio, puntoCliente];
     });
 
-    _cargarRutaPorCalles(
-        origen: puntoAuxilio,
-        destino: puntoCliente,
+    await _cargarRutaPorCalles(
+      origen: puntoAuxilio,
+      destino: puntoCliente,
     );
-}
+  }
 
   Future<void> _cargarRutaPorCalles({
     required LatLng origen,
     required LatLng destino,
-    }) async {
+  }) async {
     setState(() {
-        _cargandoRuta = true;
+      _cargandoRuta = true;
     });
 
-    final ruta = await RoutingService().obtenerRutaPorCalles(
+    try {
+      final ruta = await RoutingService().obtenerRutaPorCalles(
         origen: origen,
         destino: destino,
-    );
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-        _ruta = ruta;
+      setState(() {
+        _ruta = ruta.isNotEmpty ? ruta : [origen, destino];
         _cargandoRuta = false;
-    });
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _ruta = [origen, destino];
+        _cargandoRuta = false;
+      });
     }
+  }
 
   LatLng? _leerPuntoAuxilioDesdeEmergencia() {
     final posiblesLat = [
@@ -112,9 +133,30 @@ class _TrackingEmergenciaScreenState extends State<TrackingEmergenciaScreen> {
     return null;
   }
 
+  Future<LatLng?> _leerPuntoAuxilioDesdeTaller() async {
+    final nroTaller = _int(widget.emergencia['nro_taller']);
+
+    if (nroTaller == null) {
+      return null;
+    }
+
+    try {
+      return await TallerService().obtenerUbicacionTaller(
+        nroTaller: nroTaller,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   double? _double(dynamic value) {
     if (value == null) return null;
     return double.tryParse(value.toString());
+  }
+
+  int? _int(dynamic value) {
+    if (value == null) return null;
+    return int.tryParse(value.toString());
   }
 
   String _texto(dynamic value) {
@@ -156,7 +198,7 @@ class _TrackingEmergenciaScreenState extends State<TrackingEmergenciaScreen> {
       _cargando = true;
     });
 
-    await Future.delayed(const Duration(milliseconds: 700));
+    await _cargarTrackingInicial();
 
     if (!mounted) return;
 

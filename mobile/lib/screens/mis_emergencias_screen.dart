@@ -3,6 +3,7 @@ import '../services/emergencia_service.dart';
 import '../theme/app_theme.dart';
 import 'detalle_emergencia_screen.dart';
 
+
 class MisEmergenciasScreen extends StatefulWidget {
   const MisEmergenciasScreen({super.key});
 
@@ -12,6 +13,7 @@ class MisEmergenciasScreen extends StatefulWidget {
 
 class _MisEmergenciasScreenState extends State<MisEmergenciasScreen> {
   late Future<List<Map<String, dynamic>>> _futureEmergencias;
+  final Set<int> _cancelandoEmergencias = {};
 
   @override
   void initState() {
@@ -27,6 +29,90 @@ class _MisEmergenciasScreenState extends State<MisEmergenciasScreen> {
     });
 
     await nuevaCarga;
+  }
+
+  int? _int(dynamic valor) {
+    if (valor == null) return null;
+    return int.tryParse(valor.toString());
+  }
+
+  bool _puedeCancelar(String estado) {
+    final e = estado.toUpperCase().trim();
+
+    return e != 'CANCELADA' &&
+        e != 'FINALIZADA' &&
+        e != 'COMPLETADA' &&
+        e != 'RESUELTO';
+  }
+
+  Future<void> _confirmarCancelarEmergencia({
+    required int nroEmergencia,
+  }) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Cancelar emergencia'),
+          content: Text(
+            '¿Quieres cancelar la emergencia N° $nroEmergencia?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('NO'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.error,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('SÍ, CANCELAR'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmar != true) return;
+
+    setState(() {
+      _cancelandoEmergencias.add(nroEmergencia);
+    });
+
+    try {
+      await EmergenciaService().cancelarEmergencia(
+        nroEmergencia: nroEmergencia,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Emergencia cancelada correctamente.'),
+          backgroundColor: AppTheme.success,
+        ),
+      );
+
+      await _refrescar();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+          ),
+          backgroundColor: AppTheme.error,
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        _cancelandoEmergencias.remove(nroEmergencia);
+      });
+    }
   }
 
   Color _colorEstado(String estado) {
@@ -107,6 +193,8 @@ class _MisEmergenciasScreenState extends State<MisEmergenciasScreen> {
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final emergencia = emergencias[index];
+                final nroEmergenciaInt = _int(emergencia['nro_emergencia']);
+                final estadoEmergencia = _texto(emergencia['estado']);
 
                 return _EmergenciaCard(
                   nroEmergencia: _texto(emergencia['nro_emergencia']),
@@ -123,6 +211,16 @@ class _MisEmergenciasScreenState extends State<MisEmergenciasScreen> {
                   vehiculoPlaca: emergencia['vehiculo_placa']?.toString(),
                   vehiculoMarca: emergencia['vehiculo_marca']?.toString(),
                   vehiculoAnio: emergencia['vehiculo_año'],
+                  puedeCancelar: nroEmergenciaInt != null && _puedeCancelar(estadoEmergencia),
+                  cancelando: nroEmergenciaInt != null &&
+                      _cancelandoEmergencias.contains(nroEmergenciaInt),
+                  onCancelar: nroEmergenciaInt == null
+                      ? null
+                      : () {
+                          _confirmarCancelarEmergencia(
+                            nroEmergencia: nroEmergenciaInt,
+                          );
+                        },
                   onTap: () async {
                     final refrescar = await Navigator.push(
                       context,
@@ -164,6 +262,10 @@ class _EmergenciaCard extends StatelessWidget {
   final String? vehiculoMarca;
   final dynamic vehiculoAnio;
 
+  final bool puedeCancelar;
+  final bool cancelando;
+  final VoidCallback? onCancelar;
+
   const _EmergenciaCard({
     required this.nroEmergencia,
     required this.tipoEmergencia,
@@ -180,6 +282,9 @@ class _EmergenciaCard extends StatelessWidget {
     this.vehiculoPlaca,
     this.vehiculoMarca,
     this.vehiculoAnio,
+    required this.puedeCancelar,
+    required this.cancelando,
+    required this.onCancelar,
   });
 
   String _coordenadas() {
@@ -292,6 +397,49 @@ class _EmergenciaCard extends StatelessWidget {
                     icon: Icons.check_circle_outline_rounded,
                     label: 'Fecha fin',
                     value: fechaFin!,
+                  ),
+                ],
+                if (puedeCancelar) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: cancelando ? null : onCancelar,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.error,
+                        side: BorderSide(
+                          color: AppTheme.error.withOpacity(0.45),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 11,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      icon: cancelando
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppTheme.error,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.cancel_outlined,
+                              size: 17,
+                            ),
+                      label: Text(
+                        cancelando ? 'CANCELANDO...' : 'CANCELAR EMERGENCIA',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ],
