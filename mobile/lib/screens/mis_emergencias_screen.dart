@@ -120,6 +120,9 @@ class _MisEmergenciasScreenState extends State<MisEmergenciasScreen> {
                   nroTaller: emergencia['nro_taller'],
                   colorEstado: _colorEstado(_texto(emergencia['estado'])),
                   iconoTipo: _iconoTipo(_texto(emergencia['tipo_emergencia'])),
+                  vehiculoPlaca: emergencia['vehiculo_placa']?.toString(),
+                  vehiculoMarca: emergencia['vehiculo_marca']?.toString(),
+                  vehiculoAnio: emergencia['vehiculo_año'],
                   onTap: () async {
                     final refrescar = await Navigator.push(
                       context,
@@ -157,6 +160,9 @@ class _EmergenciaCard extends StatelessWidget {
   final Color colorEstado;
   final IconData iconoTipo;
   final VoidCallback onTap;
+  final String? vehiculoPlaca;
+  final String? vehiculoMarca;
+  final dynamic vehiculoAnio;
 
   const _EmergenciaCard({
     required this.nroEmergencia,
@@ -171,6 +177,9 @@ class _EmergenciaCard extends StatelessWidget {
     required this.colorEstado,
     required this.iconoTipo,
     required this.onTap,
+    this.vehiculoPlaca,
+    this.vehiculoMarca,
+    this.vehiculoAnio,
   });
 
   String _coordenadas() {
@@ -234,6 +243,14 @@ class _EmergenciaCard extends StatelessWidget {
                               color: AppTheme.textPrimary,
                             ),
                           ),
+                          const SizedBox(height: 8),
+                            _InfoRow(
+                              icon: Icons.directions_car_rounded,
+                              label: 'Vehículo',
+                              value: vehiculoPlaca == null || vehiculoPlaca!.trim().isEmpty
+                                  ? 'No registrado'
+                                  : '${vehiculoPlaca!.toUpperCase()} · ${vehiculoMarca ?? ''} · ${vehiculoAnio ?? ''}',
+                            ),
                         ],
                       ),
                     ),

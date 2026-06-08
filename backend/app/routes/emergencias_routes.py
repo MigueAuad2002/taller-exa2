@@ -15,7 +15,7 @@ def normalizar_rol(rol_usuario: str):
 @router.get('/')
 def get_todas_las_emergencias(token_data: dict = Depends(verificar_token)):
     if normalizar_rol(token_data.get('nombre_rol')) not in ('ADMINISTRADOR','GERENTE TALLER'):
-        raise HTTPException(status_code=403, detail="Solo administradores.")
+        raise HTTPException(status_code=403, detail="Solo administradores y gerentes.")
     return emergencias_services.listar_todas_las_emergencias()
 
 #RUTA GET MIS EMERGENCIAS
@@ -27,6 +27,14 @@ def get_mis_emergencias(token_data: dict = Depends(verificar_token)):
 @router.get('/mi-taller')
 def get_emergencias_mi_taller(token_data: dict = Depends(verificar_token)):
     return emergencias_services.listar_emergencias_mi_taller(token_data.get('nro_usuario'))
+
+#RUTA GET EVIDENCIAS DE UNA EMERGENCIA
+@router.get('/{nro_emergencia}/evidencias')
+def get_evidencias_emergencia(nro_emergencia: int, token_data: dict = Depends(verificar_token)):
+    try:
+        return emergencias_services.obtener_evidencias_emergencia(nro_emergencia, token_data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 #RUTA POST CREAR
 @router.post('/')

@@ -16,9 +16,16 @@ def listar_emergencias_mi_taller(nro_usuario: int):
     if not nro_usuario:
         raise ValueError("No se pudo identificar al usuario autenticado.")
     emergencias = emergencias_repos.obtener_emergencias_por_taller_del_mecanico(nro_usuario)
-    return {"success": True, "message": "Emergencias del taller del mecánico recuperadas exitosamente", "data": emergencias}
+    return {"success": True, "message": "Emergencias del taller recuperadas exitosamente", "data": emergencias}
 
-#FUNCIONES DE ESCRITURA CON NOTIFICACIONES
+def obtener_evidencias_emergencia(nro_emergencia: int, token_data: dict):
+    emergencia = emergencias_repos.obtener_emergencia_por_id(nro_emergencia)
+    if not emergencia:
+        raise ValueError("La emergencia especificada no existe.")
+    evidencias = emergencias_repos.obtener_evidencias_db(nro_emergencia)
+    return {"success": True, "message": "Evidencias recuperadas con éxito", "data": evidencias}
+
+#FUNCIONES DE ESCRITURA CON NOTIFICACIONES Y BASE64
 
 def normalizar_rol(rol_usuario: str):
     return rol_usuario.strip().upper() if rol_usuario else ""
@@ -30,21 +37,26 @@ def registrar_emergencia(data: dict, token_data: dict, background_tasks: Backgro
     longitud = data.get('longitud')
     prioridad = data.get('prioridad', 'MEDIA')
     
+    #VALIDACION NO AGRESIVA DE VEHICULO
+    nro_vehiculo = data.get('nro_vehiculo', None)
+    if 'nro_vehiculo' in data and not nro_vehiculo:
+        raise ValueError("Si provee la llave 'nro_vehiculo', no puede estar vacía.")
+    
     #VALIDACIONES POR ROL
     if rol == 'ADMINISTRADOR':
         nro_usuario = data.get('nro_usuario')
         if not nro_usuario:
-            raise ValueError("Como Administrador, debe especificar el 'nro_usuario' para asignar la emergencia.")
+            raise ValueError("Administrador: debe especificar el 'nro_usuario'.")
     elif rol == 'CLIENTE':
         nro_usuario = token_data.get('nro_usuario')
         evidencias = data.get('evidencias', [])
         if not evidencias:
-            raise ValueError("Como Cliente, es obligatorio adjuntar al menos una evidencia.")
+            raise ValueError("Cliente: es obligatorio adjuntar al menos una evidencia.")
     else:
         raise ValueError("Rol no autorizado para crear emergencias.")
 
     nuevo_id = emergencias_repos.crear_emergencia_db(
-        tipo_emergencia.upper(), latitud, longitud, 'PENDIENTE', prioridad.upper(), nro_usuario
+        tipo_emergencia.upper(), latitud, longitud, 'PENDIENTE', prioridad.upper(), nro_usuario, nro_vehiculo
     )
 
     #PROCESAR EVIDENCIAS BASE64 AL CREAR
@@ -62,7 +74,7 @@ def registrar_emergencia(data: dict, token_data: dict, background_tasks: Backgro
         tipo_emergencia.upper()
     )
 
-    return {"success": True, "message": "Emergencia creada y notificaciones enviadas.", "nro_emergencia": nuevo_id}
+    return {"success": True, "message": "Emergencia y evidencias creadas.", "nro_emergencia": nuevo_id}
 
 def actualizar_emergencia(nro_emergencia: int, data: dict, token_data: dict):
     rol = normalizar_rol(token_data.get('nombre_rol'))
@@ -74,14 +86,14 @@ def actualizar_emergencia(nro_emergencia: int, data: dict, token_data: dict):
 
     if rol == 'ADMINISTRADOR':
         estado = data.get('estado')
-        if not estado: raise ValueError("Admin solo puede actualizar el 'estado'.")
+        if not estado: raise ValueError("Admin: solo puede actualizar el 'estado'.")
         emergencias_repos.actualizar_estado_emergencia_db(nro_emergencia, estado.upper())
     
     elif rol in ['MECANICO', 'MECÁNICO', 'TECNICO', 'TÉCNICO']:
         if emergencia['nro_taller'] != nro_taller_token:
             raise ValueError("Acceso Denegado: Emergencia no asignada a tu taller.")
         estado = data.get('estado')
-        if not estado: raise ValueError("Mecánico solo puede actualizar el 'estado'.")
+        if not estado: raise ValueError("Mecánico: solo puede actualizar el 'estado'.")
         emergencias_repos.actualizar_estado_emergencia_db(nro_emergencia, estado.upper())
     
     #PROCESAR EVIDENCIAS BASE64 AL ACTUALIZAR

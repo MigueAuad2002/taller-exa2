@@ -7,12 +7,14 @@ def obtener_todas_las_emergencias():
     db.create_connection()
     try:
         query = f"""
-            SELECT nro_emergencia, tipo_emergencia, latitud, longitud, 
-            fecha_inicio, fecha_fin, a.estado, prioridad, 
-            a.nro_usuario, a.nro_taller, a.id_empresa,b.nombre_usuario
+            SELECT a.nro_emergencia, a.tipo_emergencia, a.latitud, a.longitud, 
+            a.fecha_inicio, a.fecha_fin, a.estado, a.prioridad, 
+            a.nro_usuario, a.nro_taller, a.id_empresa, b.nombre_usuario,
+            a.nro_vehiculo, v.placa, v.marca_modelo, v.año
             FROM {Config.SCHEMA}.emergencia a
-            INNER JOIN {Config.SCHEMA}.usuario b ON a.nro_usuario =b.nro_usuario 
-            ORDER BY fecha_inicio DESC;
+            INNER JOIN {Config.SCHEMA}.usuario b ON a.nro_usuario = b.nro_usuario 
+            LEFT JOIN {Config.SCHEMA}.vehiculo v ON a.nro_vehiculo = v.nro_vehiculo
+            ORDER BY a.fecha_inicio DESC;
         """
         resultados = db.execute_query(query, fetchall=True)
 
@@ -31,7 +33,11 @@ def obtener_todas_las_emergencias():
                     "nro_usuario": r[8],
                     "nro_taller": r[9],
                     "id_empresa": r[10],
-                    "nombre_usuario":r[11]
+                    "nombre_usuario": r[11],
+                    "nro_vehiculo": r[12],
+                    "vehiculo_placa": r[13],
+                    "vehiculo_marca": r[14],
+                    "vehiculo_año": r[15]
                 })
         return emergencias
     finally:
@@ -43,12 +49,14 @@ def obtener_emergencias_por_usuario(nro_usuario: int):
     db.create_connection()
     try:
         query = f"""
-            SELECT nro_emergencia, tipo_emergencia, latitud, longitud, 
-                   fecha_inicio, fecha_fin, estado, prioridad, 
-                   nro_taller, id_empresa
-            FROM {Config.SCHEMA}.emergencia
-            WHERE nro_usuario = %s
-            ORDER BY fecha_inicio DESC;
+            SELECT e.nro_emergencia, e.tipo_emergencia, e.latitud, e.longitud, 
+                   e.fecha_inicio, e.fecha_fin, e.estado, e.prioridad, 
+                   e.nro_taller, e.id_empresa, e.nro_vehiculo,
+                   v.placa, v.marca_modelo, v.año
+            FROM {Config.SCHEMA}.emergencia e
+            LEFT JOIN {Config.SCHEMA}.vehiculo v ON e.nro_vehiculo = v.nro_vehiculo
+            WHERE e.nro_usuario = %s
+            ORDER BY e.fecha_inicio DESC;
         """
         resultados = db.execute_query(query, (nro_usuario,), fetchall=True)
 
@@ -66,7 +74,11 @@ def obtener_emergencias_por_usuario(nro_usuario: int):
                     "prioridad": r[7],
                     "nro_usuario": nro_usuario,
                     "nro_taller": r[8],
-                    "id_empresa": r[9]
+                    "id_empresa": r[9],
+                    "nro_vehiculo": r[10],
+                    "vehiculo_placa": r[11],
+                    "vehiculo_marca": r[12],
+                    "vehiculo_año": r[13]
                 })
         return emergencias
     finally:
@@ -79,29 +91,17 @@ def obtener_emergencias_por_taller_del_mecanico(nro_usuario: int):
     try:
         query = f"""
             SELECT 
-                e.nro_emergencia,
-                e.tipo_emergencia,
-                e.latitud,
-                e.longitud,
-                e.fecha_inicio,
-                e.fecha_fin,
-                e.estado,
-                e.prioridad,
-                e.nro_usuario,
-                e.nro_taller,
-                e.id_empresa,
-                t.nombre_taller,
-                p.nombre_completo,
-                p.telefono
+                e.nro_emergencia, e.tipo_emergencia, e.latitud, e.longitud,
+                e.fecha_inicio, e.fecha_fin, e.estado, e.prioridad,
+                e.nro_usuario, e.nro_taller, e.id_empresa, t.nombre_taller,
+                p.nombre_completo, p.telefono, e.nro_vehiculo,
+                v.placa, v.marca_modelo, v.año
             FROM {Config.SCHEMA}.usuario um
-            INNER JOIN {Config.SCHEMA}.taller t
-                ON um.nro_taller = t.nro_taller
-            INNER JOIN {Config.SCHEMA}.emergencia e
-                ON e.nro_taller = t.nro_taller
-            INNER JOIN {Config.SCHEMA}.usuario uc
-                ON e.nro_usuario = uc.nro_usuario
-            INNER JOIN {Config.SCHEMA}.persona p
-                ON uc.ci = p.ci
+            INNER JOIN {Config.SCHEMA}.taller t ON um.nro_taller = t.nro_taller
+            INNER JOIN {Config.SCHEMA}.emergencia e ON e.nro_taller = t.nro_taller
+            INNER JOIN {Config.SCHEMA}.usuario uc ON e.nro_usuario = uc.nro_usuario
+            INNER JOIN {Config.SCHEMA}.persona p ON uc.ci = p.ci
+            LEFT JOIN {Config.SCHEMA}.vehiculo v ON e.nro_vehiculo = v.nro_vehiculo
             WHERE um.nro_usuario = %s
               AND um.nro_taller IS NOT NULL
               AND um.id_empresa IS NOT NULL
@@ -127,7 +127,11 @@ def obtener_emergencias_por_taller_del_mecanico(nro_usuario: int):
                     "id_empresa": r[10],
                     "nombre_taller": r[11],
                     "cliente": r[12],
-                    "telefono_cliente": r[13]
+                    "telefono_cliente": r[13],
+                    "nro_vehiculo": r[14],
+                    "vehiculo_placa": r[15],
+                    "vehiculo_marca": r[16],
+                    "vehiculo_año": r[17]
                 })
 
         return emergencias
@@ -135,19 +139,19 @@ def obtener_emergencias_por_taller_del_mecanico(nro_usuario: int):
         db.close_connection()
 
 #CREAR EMERGENCIA
-def crear_emergencia_db(tipo_emergencia, latitud, longitud, estado, prioridad, nro_usuario):
+def crear_emergencia_db(tipo_emergencia, latitud, longitud, estado, prioridad, nro_usuario, nro_vehiculo=None):
     db = PostgreSQL()
     db.create_connection()
     try:
         query = f"""
             INSERT INTO {Config.SCHEMA}.emergencia 
-            (tipo_emergencia, latitud, longitud, fecha_inicio, estado, prioridad, nro_usuario) 
-            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s) 
+            (tipo_emergencia, latitud, longitud, fecha_inicio, estado, prioridad, nro_usuario, nro_vehiculo) 
+            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s) 
             RETURNING nro_emergencia;
         """
         resultado = db.execute_query(
             query,
-            (tipo_emergencia, latitud, longitud, estado, prioridad, nro_usuario),
+            (tipo_emergencia, latitud, longitud, estado, prioridad, nro_usuario, nro_vehiculo),
             fetchone=True,
             commit=True
         )
@@ -156,19 +160,19 @@ def crear_emergencia_db(tipo_emergencia, latitud, longitud, estado, prioridad, n
         db.close_connection()
 
 #ACTUALIZAR EMERGENCIA
-def actualizar_emergencia_db(nro_emergencia, tipo_emergencia, latitud, longitud, estado, prioridad, nro_taller, id_empresa):
+def actualizar_emergencia_db(nro_emergencia, tipo_emergencia, latitud, longitud, estado, prioridad, nro_taller, id_empresa, nro_vehiculo=None):
     db = PostgreSQL()
     db.create_connection()
     try:
         query = f"""
             UPDATE {Config.SCHEMA}.emergencia 
             SET tipo_emergencia = %s, latitud = %s, longitud = %s, 
-                estado = %s, prioridad = %s, nro_taller = %s, id_empresa = %s
+                estado = %s, prioridad = %s, nro_taller = %s, id_empresa = %s, nro_vehiculo = %s
             WHERE nro_emergencia = %s;
         """
         filas_afectadas = db.execute_query(
             query,
-            (tipo_emergencia, latitud, longitud, estado, prioridad, nro_taller, id_empresa, nro_emergencia),
+            (tipo_emergencia, latitud, longitud, estado, prioridad, nro_taller, id_empresa, nro_vehiculo, nro_emergencia),
             commit=True
         )
         return filas_afectadas > 0
@@ -197,8 +201,9 @@ def obtener_emergencia_por_id(nro_emergencia: int):
             return {
                 "nro_emergencia": resultado[0],
                 "estado": resultado[6], 
-                "nro_usuario": resultado[8], 
-                "nro_taller": resultado[9]   
+                "nro_usuario": resultado[8],
+                "nro_taller": resultado[9],
+                "nro_vehiculo": resultado[12] if len(resultado) > 12 else None
             }
         return None
     finally:
@@ -232,5 +237,34 @@ def eliminar_evidencia_db(nro_evidencia: int):
     try:
         query = f"DELETE FROM {Config.SCHEMA}.evidencia WHERE nro_evidencia = %s;"
         db.execute_query(query, (nro_evidencia,), commit=True)
+    finally:
+        db.close_connection()
+
+#OBTENER EVIDENCIAS POR EMERGENCIA
+def obtener_evidencias_db(nro_emergencia: int):
+    db = PostgreSQL()
+    db.create_connection()
+    try:
+        query = f"""
+            SELECT nro_evidencia, tipo_archivo, url_archivo, 
+                   transcripcion_archivo, diagnostico_archivo, fecha_carga
+            FROM {Config.SCHEMA}.evidencia
+            WHERE nro_emergencia = %s
+            ORDER BY fecha_carga ASC;
+        """
+        resultados = db.execute_query(query, (nro_emergencia,), fetchall=True)
+        
+        evidencias = []
+        if resultados:
+            for r in resultados:
+                evidencias.append({
+                    "nro_evidencia": r[0],
+                    "tipo_archivo": r[1],
+                    "base64": r[2], 
+                    "transcripcion_archivo": r[3],
+                    "diagnostico_archivo": r[4],
+                    "fecha_carga": r[5].strftime("%Y-%m-%d %H:%M:%S") if r[5] else None
+                })
+        return evidencias
     finally:
         db.close_connection()

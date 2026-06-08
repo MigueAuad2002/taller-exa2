@@ -1,6 +1,15 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+
 import '../services/emergencia_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ev_widgets.dart';
@@ -19,10 +28,42 @@ class DetalleEmergenciaScreen extends StatefulWidget {
 }
 
 class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
+  final ImagePicker _imagePicker = ImagePicker();
+  final AudioRecorder _audioRecorder = AudioRecorder();
+
+  late Future<List<Map<String, dynamic>>> _futureEvidencias;
+
   bool _agregando = false;
+  bool _grabandoAudio = false;
 
   int get _nroEmergencia {
     return int.parse(widget.emergencia['nro_emergencia'].toString());
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _futureEvidencias = EmergenciaService().listarEvidenciasEmergencia(
+      nroEmergencia: _nroEmergencia,
+    );
+  }
+
+  @override
+  void dispose() {
+    _audioRecorder.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refrescarEvidencias() async {
+    final nuevaCarga = EmergenciaService().listarEvidenciasEmergencia(
+      nroEmergencia: _nroEmergencia,
+    );
+
+    setState(() {
+      _futureEvidencias = nuevaCarga;
+    });
+
+    await nuevaCarga;
   }
 
   String _texto(dynamic valor) {
@@ -43,103 +84,113 @@ class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
     return AppTheme.textSecondary;
   }
 
-  Future<void> _mostrarDialogoAgregarEvidencia() async {
-    final controller = TextEditingController();
+  Uint8List? _base64ToBytes(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
 
-    await showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          title: const Text(
-            'Agregar evidencia',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              EvTextField(
-                label: 'URL DE EVIDENCIA',
-                hint: 'Ej: https://servidor.com/evidencia.jpg',
-                controller: controller,
-                keyboardType: TextInputType.url,
-                validator: (_) => null,
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Por ahora el backend recibe evidencias como URL. Luego se puede agregar subida de imagen o audio.',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppTheme.textSecondary,
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: _agregando ? null : () => Navigator.pop(ctx),
-              child: const Text(
-                'Cancelar',
-                style: TextStyle(color: AppTheme.textSecondary),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                minimumSize: Size.zero,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 10,
-                ),
-              ),
-              onPressed: _agregando
-                  ? null
-                  : () async {
-                      final url = controller.text.trim();
+    try {
+      var raw = value.trim();
 
-                      if (url.isEmpty) {
-                        _mostrarError('Ingrese una URL de evidencia.');
-                        return;
-                      }
+      if (raw.contains(',')) {
+        raw = raw.split(',').last;
+      }
 
-                      if (!url.startsWith('http://') &&
-                          !url.startsWith('https://')) {
-                        _mostrarError('Ingrese una URL válida.');
-                        return;
-                      }
-
-                      Navigator.pop(ctx);
-                      await _agregarEvidencia(url);
-                    },
-              child: const Text(
-                'AGREGAR',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    controller.dispose();
+      return base64Decode(raw);
+    } catch (_) {
+      return null;
+    }
   }
 
-  Future<void> _agregarEvidencia(String url) async {
+  Future<void> _agregarImagen(ImageSource source) async {
+    try {
+      final imagen = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 45,
+        maxWidth: 1280,
+      );
+
+      if (imagen == null) return;
+
+      final bytes = await File(imagen.path).readAsBytes();
+      final base64String = base64Encode(bytes);
+
+      await _agregarEvidencias([
+        {
+          'tipo_archivo': 'IMAGEN',
+          'base64': base64String,
+        }
+      ]);
+    } catch (_) {
+      _mostrarError('No se pudo cargar la imagen.');
+    }
+  }
+
+  Future<void> _iniciarGrabacionAudio() async {
+    try {
+      final permiso = await _audioRecorder.hasPermission();
+
+      if (!permiso) {
+        _mostrarError('Se necesita permiso de micrófono.');
+        return;
+      }
+
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/evidencia_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      await _audioRecorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 64000,
+          sampleRate: 44100,
+        ),
+        path: path,
+      );
+
+      setState(() {
+        _grabandoAudio = true;
+      });
+    } catch (_) {
+      _mostrarError('No se pudo iniciar la grabación.');
+    }
+  }
+
+  Future<void> _detenerGrabacionAudio() async {
+    try {
+      final path = await _audioRecorder.stop();
+
+      setState(() {
+        _grabandoAudio = false;
+      });
+
+      if (path == null) return;
+
+      final bytes = await File(path).readAsBytes();
+      final base64String = base64Encode(bytes);
+
+      await _agregarEvidencias([
+        {
+          'tipo_archivo': 'AUDIO',
+          'base64': base64String,
+        }
+      ]);
+    } catch (_) {
+      setState(() {
+        _grabandoAudio = false;
+      });
+
+      _mostrarError('No se pudo guardar el audio.');
+    }
+  }
+
+  Future<void> _agregarEvidencias(
+    List<Map<String, dynamic>> evidencias,
+  ) async {
     setState(() => _agregando = true);
 
     try {
-      await EmergenciaService().agregarEvidencia(
+      await EmergenciaService().agregarEvidencias(
         nroEmergencia: _nroEmergencia,
-        urlEvidencia: url,
+        evidencias: evidencias,
       );
 
       if (!mounted) return;
@@ -150,12 +201,104 @@ class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
           backgroundColor: AppTheme.success,
         ),
       );
+
+      await _refrescarEvidencias();
     } catch (e) {
       if (!mounted) return;
       _mostrarError(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _agregando = false);
     }
+  }
+
+  void _mostrarOpcionesEvidencia() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(14),
+        ),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 38,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppTheme.border,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.attach_file_rounded,
+                      color: AppTheme.primary,
+                      size: 22,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Agregar evidencia',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _EvidenceOptionButton(
+                  icon: Icons.photo_camera_outlined,
+                  title: 'Tomar foto',
+                  subtitle: 'Abrir cámara del celular',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _agregarImagen(ImageSource.camera);
+                  },
+                ),
+                const SizedBox(height: 10),
+                _EvidenceOptionButton(
+                  icon: Icons.image_outlined,
+                  title: 'Elegir imagen',
+                  subtitle: 'Seleccionar desde galería',
+                  onTap: () {
+                    Navigator.pop(context);
+                    _agregarImagen(ImageSource.gallery);
+                  },
+                ),
+                const SizedBox(height: 10),
+                _EvidenceOptionButton(
+                  icon: _grabandoAudio
+                      ? Icons.stop_circle_outlined
+                      : Icons.mic_none_outlined,
+                  title: _grabandoAudio ? 'Detener audio' : 'Grabar audio',
+                  subtitle: _grabandoAudio
+                      ? 'Finalizar grabación actual'
+                      : 'Registrar audio como evidencia',
+                  danger: _grabandoAudio,
+                  onTap: () {
+                    Navigator.pop(context);
+                    _grabandoAudio
+                        ? _detenerGrabacionAudio()
+                        : _iniciarGrabacionAudio();
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _mostrarError(String mensaje) {
@@ -196,100 +339,505 @@ class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
           bottom: MediaQuery.of(context).padding.bottom + 12,
         ),
         child: EvPrimaryButton(
-          label: 'Agregar Evidencia',
+          label: _grabandoAudio ? 'Detener Grabación' : 'Agregar Evidencia',
           loading: _agregando,
-          onPressed: _mostrarDialogoAgregarEvidencia,
+          onPressed: _grabandoAudio
+              ? _detenerGrabacionAudio
+              : _mostrarOpcionesEvidencia,
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+      body: RefreshIndicator(
+        color: AppTheme.primary,
+        onRefresh: _refrescarEvidencias,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              _HeaderDetalle(
+                nroEmergencia: _texto(emergencia['nro_emergencia']),
+                tipoEmergencia: _texto(emergencia['tipo_emergencia']),
+                estado: estado,
+                colorEstado: _colorEstado(estado),
+              ),
+              const SizedBox(height: 14),
+              _DetalleCard(
+                title: 'Vehículo',
+                children: [
+                  _InfoRow(
+                    icon: Icons.directions_car_rounded,
+                    label: 'Placa',
+                    value: _texto(emergencia['vehiculo_placa']).toUpperCase(),
+                  ),
+                  const SizedBox(height: 10),
+                  _InfoRow(
+                    icon: Icons.car_repair_outlined,
+                    label: 'Marca',
+                    value: _texto(emergencia['vehiculo_marca']),
+                  ),
+                  const SizedBox(height: 10),
+                  _InfoRow(
+                    icon: Icons.calendar_today_outlined,
+                    label: 'Año',
+                    value: _texto(emergencia['vehiculo_año']),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _DetalleCard(
+                title: 'Información general',
+                children: [
+                  _InfoRow(
+                    icon: Icons.priority_high_rounded,
+                    label: 'Prioridad',
+                    value: _texto(emergencia['prioridad']).toUpperCase(),
+                  ),
+                  const SizedBox(height: 10),
+                  _InfoRow(
+                    icon: Icons.calendar_today_outlined,
+                    label: 'Inicio',
+                    value: _texto(emergencia['fecha_inicio']),
+                  ),
+                  const SizedBox(height: 10),
+                  _InfoRow(
+                    icon: Icons.check_circle_outline_rounded,
+                    label: 'Fin',
+                    value: _texto(emergencia['fecha_fin']),
+                  ),
+                  const SizedBox(height: 10),
+                  _InfoRow(
+                    icon: Icons.build_outlined,
+                    label: 'Taller',
+                    value: emergencia['nro_taller'] == null
+                        ? 'Pendiente de asignación'
+                        : 'Taller N° ${emergencia['nro_taller']}',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _DetalleCard(
+                title: 'Ubicación',
+                children: [
+                  _InfoRow(
+                    icon: Icons.location_on_outlined,
+                    label: 'Coordenadas',
+                    value: latitud == null || longitud == null
+                        ? 'Ubicación no disponible'
+                        : 'Lat: $latitud\nLng: $longitud',
+                  ),
+                  if (latitud != null && longitud != null) ...[
+                    const SizedBox(height: 14),
+                    _MapaDetalle(
+                      latitud: double.parse(latitud.toString()),
+                      longitud: double.parse(longitud.toString()),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 14),
+              _DetalleCard(
+                title: 'Evidencias',
+                children: [
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _futureEvidencias,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        );
+                      }
+
+                      if (snapshot.hasError) {
+                        return _EvidenceEmptyMessage(
+                          icon: Icons.error_outline_rounded,
+                          title: 'No se pudieron cargar las evidencias',
+                          subtitle: snapshot.error
+                              .toString()
+                              .replaceAll('Exception: ', ''),
+                        );
+                      }
+
+                      final evidencias = snapshot.data ?? [];
+
+                      if (evidencias.isEmpty) {
+                        return const _EvidenceEmptyMessage(
+                          icon: Icons.folder_open_outlined,
+                          title: 'Sin evidencias registradas',
+                          subtitle:
+                              'Puedes agregar fotos o audios desde el botón inferior.',
+                        );
+                      }
+
+                      return Column(
+                        children: List.generate(evidencias.length, (index) {
+                          final ev = evidencias[index];
+                          final tipo = _texto(ev['tipo_archivo']).toUpperCase();
+                          final bytes = _base64ToBytes(ev['base64']);
+
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              bottom: index == evidencias.length - 1 ? 0 : 12,
+                            ),
+                            child: _EvidenciaCard(
+                              evidencia: ev,
+                              tipo: tipo,
+                              bytes: bytes,
+                            ),
+                          );
+                        }),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EvidenceOptionButton extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool danger;
+  final VoidCallback onTap;
+
+  const _EvidenceOptionButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? AppTheme.error : AppTheme.primary;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: color.withOpacity(0.2),
+          ),
+        ),
+        child: Row(
           children: [
-            _HeaderDetalle(
-              nroEmergencia: _texto(emergencia['nro_emergencia']),
-              tipoEmergencia: _texto(emergencia['tipo_emergencia']),
-              estado: estado,
-              colorEstado: _colorEstado(estado),
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: color,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 14),
-            _DetalleCard(
-              title: 'Información general',
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EvidenciaCard extends StatelessWidget {
+  final Map<String, dynamic> evidencia;
+  final String tipo;
+  final Uint8List? bytes;
+
+  const _EvidenciaCard({
+    required this.evidencia,
+    required this.tipo,
+    required this.bytes,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fecha = evidencia['fecha_carga']?.toString();
+    final transcripcion = evidencia['transcripcion_archivo']?.toString();
+    final diagnostico = evidencia['diagnostico_archivo']?.toString();
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (tipo == 'IMAGEN' && bytes != null)
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(8),
+              ),
+              child: Image.memory(
+                bytes!,
+                width: double.infinity,
+                height: 190,
+                fit: BoxFit.cover,
+              ),
+            )
+          else if (tipo == 'AUDIO' && bytes != null)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: _AudioEvidencePlayer(bytes: bytes!),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text(
+                'No se pudo visualizar esta evidencia.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
               children: [
                 _InfoRow(
-                  icon: Icons.priority_high_rounded,
-                  label: 'Prioridad',
-                  value: _texto(emergencia['prioridad']).toUpperCase(),
+                  icon: tipo == 'AUDIO'
+                      ? Icons.audiotrack_rounded
+                      : Icons.image_outlined,
+                  label: 'Tipo',
+                  value: tipo,
                 ),
-                const SizedBox(height: 10),
-                _InfoRow(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'Fecha inicio',
-                  value: _texto(emergencia['fecha_inicio']),
-                ),
-                const SizedBox(height: 10),
-                _InfoRow(
-                  icon: Icons.check_circle_outline_rounded,
-                  label: 'Fecha fin',
-                  value: _texto(emergencia['fecha_fin']),
-                ),
-                const SizedBox(height: 10),
-                _InfoRow(
-                  icon: Icons.build_outlined,
-                  label: 'Taller',
-                  value: emergencia['nro_taller'] == null
-                      ? 'Pendiente de asignación'
-                      : 'Taller N° ${emergencia['nro_taller']}',
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            _DetalleCard(
-              title: 'Ubicación',
-              children: [
-                _InfoRow(
-                  icon: Icons.location_on_outlined,
-                  label: 'Coordenadas',
-                  value: latitud == null || longitud == null
-                      ? 'Ubicación no disponible'
-                      : 'Lat: $latitud\nLng: $longitud',
-                ),
-                if (latitud != null && longitud != null) ...[
-                  const SizedBox(height: 14),
-                  _MapaDetalle(
-                    latitud: double.parse(latitud.toString()),
-                    longitud: double.parse(longitud.toString()),
+                if (fecha != null && fecha.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    icon: Icons.access_time_rounded,
+                    label: 'Fecha',
+                    value: fecha,
+                  ),
+                ],
+                if (transcripcion != null &&
+                    transcripcion.trim().isNotEmpty &&
+                    transcripcion != 'None') ...[
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    icon: Icons.notes_outlined,
+                    label: 'Transcripción',
+                    value: transcripcion,
+                  ),
+                ],
+                if (diagnostico != null &&
+                    diagnostico.trim().isNotEmpty &&
+                    diagnostico != 'None') ...[
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    icon: Icons.psychology_outlined,
+                    label: 'Diagnóstico',
+                    value: diagnostico,
                   ),
                 ],
               ],
             ),
-            const SizedBox(height: 14),
-            _DetalleCard(
-              title: 'Evidencias',
-              children: const [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      size: 16,
-                      color: AppTheme.textSecondary,
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Puedes agregar evidencias a esta emergencia. El backend actual no devuelve la lista de evidencias en este endpoint.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AudioEvidencePlayer extends StatefulWidget {
+  final Uint8List bytes;
+
+  const _AudioEvidencePlayer({
+    required this.bytes,
+  });
+
+  @override
+  State<_AudioEvidencePlayer> createState() => _AudioEvidencePlayerState();
+}
+
+class _AudioEvidencePlayerState extends State<_AudioEvidencePlayer> {
+  final AudioPlayer _player = AudioPlayer();
+  bool _reproduciendo = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _player.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+
+      setState(() {
+        _reproduciendo = false;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggleAudio() async {
+    if (_reproduciendo) {
+      await _player.stop();
+
+      if (!mounted) return;
+
+      setState(() {
+        _reproduciendo = false;
+      });
+
+      return;
+    }
+
+    await _player.play(BytesSource(widget.bytes));
+
+    if (!mounted) return;
+
+    setState(() {
+      _reproduciendo = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _reproduciendo
+                  ? Icons.stop_rounded
+                  : Icons.play_arrow_rounded,
+              color: AppTheme.primary,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Audio de evidencia',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: _toggleAudio,
+            child: Text(
+              _reproduciendo ? 'DETENER' : 'REPRODUCIR',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EvidenceEmptyMessage extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _EvidenceEmptyMessage({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: AppTheme.textSecondary,
+            size: 24,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textSecondary,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -364,7 +912,7 @@ class _HeaderDetalle extends StatelessWidget {
               vertical: 4,
             ),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
+              color: colorEstado.withOpacity(0.18),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: Colors.white.withOpacity(0.2),

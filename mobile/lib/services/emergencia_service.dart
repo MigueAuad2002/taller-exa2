@@ -152,4 +152,62 @@ class EmergenciaService {
       throw Exception(_parsearErrorDio(e));
     }
   }
+
+  Future<List<Map<String, dynamic>>> listarEvidenciasEmergencia({
+    required int nroEmergencia,
+  }) async {
+    try {
+      final response = await ApiClient.dio.get(
+        '$_basePath/$nroEmergencia/evidencias',
+      );
+
+      final data = response.data;
+
+      if (data is! Map) {
+        throw Exception('Respuesta inválida del servidor.');
+      }
+
+      if (data['success'] != true) {
+        throw Exception(data['message'] ?? 'No se pudieron obtener las evidencias.');
+      }
+
+      final lista = data['data'] as List? ?? [];
+
+      return lista
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+    } on DioException catch (e) {
+      throw Exception(_parsearErrorDio(e));
+    }
+  }
+
+  Future<Map<String, dynamic>> agregarEvidencias({
+    required int nroEmergencia,
+    required List<Map<String, dynamic>> evidencias,
+  }) async {
+    try {
+      final response = await ApiClient.dio.put(
+        '$_basePath/$nroEmergencia',
+        data: {
+          'añadir_evidencias': evidencias,
+          'eliminar_evidencias': [],
+        },
+      );
+
+      final data = response.data;
+
+      if (data is! Map) {
+        throw Exception('Respuesta inválida del servidor.');
+      }
+
+      if (data['success'] != true) {
+        throw Exception(data['message'] ?? 'No se pudieron agregar las evidencias.');
+      }
+
+      return Map<String, dynamic>.from(data);
+    } on DioException catch (e) {
+      throw Exception(_parsearErrorDio(e));
+    }
+  }
+
 }
