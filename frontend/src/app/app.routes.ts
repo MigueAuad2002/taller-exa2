@@ -8,6 +8,7 @@ import { ListaEmpresasComponent } from './pages/empresas/lista-empresas/lista-em
 import { BackupComponent } from './pages/backup/backup';
 import { TalleresComponent } from './pages/talleres/talleres';
 import { MapaTalleresComponent } from './pages/mapa-talleres/mapa-talleres';
+import { ServiciosTallerComponent } from './pages/servicios-taller/servicios-taller';
 
 //LAYOUTS
 import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout';
@@ -15,6 +16,7 @@ import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout';
 //GUARDS
 import { publicGuard } from './guards/public-guard';
 import { authGuard } from './guards/auth-guard';
+
 
 
 
@@ -39,7 +41,8 @@ export const routes: Routes = [
             { path: 'empresas', component: ListaEmpresasComponent },
             { path:'backup',component:BackupComponent },
             { path:'talleres', component: TalleresComponent },
-            { path:'mapa-talleres', component: MapaTalleresComponent }  
+            { path:'mapa-talleres', component: MapaTalleresComponent },
+            { path:'talleres/:id/servicios', component:ServiciosTallerComponent }  
         ]
     },
     { path: '**', redirectTo: 'login' }

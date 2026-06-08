@@ -38,7 +38,6 @@ def validar_pertenencia_taller(nro_taller: int, token_data: dict):
 
 
 #ENDPOINTS DE TALLER
-
 @router.get('/')
 def get_talleres(token_data: dict = Depends(verificar_token)):
     validar_rol_taller(token_data.get('nombre_rol'))

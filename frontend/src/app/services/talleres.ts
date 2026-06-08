@@ -27,7 +27,7 @@ export class TalleresService {
   private http = inject(HttpClient);
   private authService = inject(AuthService);
   
-  // Base URLs
+  //BASE DE URL DE LA API FASTAPI
   private apiUrl = `${environment.apiUrl}/api/talleres`;
   private apiUrlEmpresas = `${environment.apiUrl}/api/empresas`; 
 
@@ -45,7 +45,7 @@ export class TalleresService {
   }
 
   crearTaller(datos: any): Observable<any> {
-    // AÑADIDO SLASH AL FINAL '/'
+    
     return this.http.post<any>(`${this.apiUrl}/`, datos, { headers: this.getHeaders() });
   }
 
@@ -57,35 +57,20 @@ export class TalleresService {
     return this.http.delete<any>(`${this.apiUrl}/${nro_taller}`, { headers: this.getHeaders() });
   }
 
-  // --- MÉTODOS PARA SERVICIOS DEL TALLER ---
-
-  obtenerServiciosTaller(nro_taller: number): Observable<{ success: boolean; data: any[] }> {
-    return this.http.get<{ success: boolean; data: any[] }>(
-      `${this.apiUrl}/${nro_taller}/servicios`, 
-      { headers: this.getHeaders() }
-    );
+  //METODOS DEDICADOS A LOS SERVICIOS DE UN TALLER
+  obtenerServiciosTaller(nro_taller: number): Observable<any> {
+    return this.http.get(`${this.apiUrl}/${nro_taller}/servicios`, { headers: this.getHeaders() });
   }
 
-  registrarServicioTaller(nro_taller: number, datos: { nombre_servicio: string; descripcion: string }): Observable<any> {
-    return this.http.post<any>(
-      `${this.apiUrl}/${nro_taller}/servicios`, 
-      datos, 
-      { headers: this.getHeaders() }
-    );
+  crearServicioTaller(nro_taller: number, datos: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/${nro_taller}/servicios`, datos, { headers: this.getHeaders() });
   }
 
   actualizarServicioTaller(nro_taller: number, nro_servicio: number, datos: any): Observable<any> {
-    return this.http.put<any>(
-      `${this.apiUrl}/${nro_taller}/servicios/${nro_servicio}`, 
-      datos, 
-      { headers: this.getHeaders() }
-    );
+    return this.http.put(`${this.apiUrl}/${nro_taller}/servicios/${nro_servicio}`, datos, { headers: this.getHeaders() });
   }
 
-  borrarServicioTaller(nro_taller: number, nro_servicio: number): Observable<any> {
-    return this.http.delete<any>(
-      `${this.apiUrl}/${nro_taller}/servicios/${nro_servicio}`, 
-      { headers: this.getHeaders() }
-    );
+  eliminarServicioTaller(nro_taller: number, nro_servicio: number): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/${nro_taller}/servicios/${nro_servicio}`, { headers: this.getHeaders() });
   }
 }
