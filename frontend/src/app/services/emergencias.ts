@@ -17,8 +17,13 @@ export interface Emergencia {
   nro_taller?: number;
   id_empresa?: number;
   nombre_taller?: string;
-  nombre_usuario?:string;
-  telefono_cliente?:string;
+  nombre_usuario?: string;
+  telefono_cliente?: string;
+  // Nuevos campos del vehículo que vienen del backend
+  nro_vehiculo?: number;
+  vehiculo_placa?: string;
+  vehiculo_marca?: string;
+  vehiculo_año?: number;
 }
 
 export interface RespuestaApiEmergencias {
@@ -40,19 +45,21 @@ export class EmergenciasService {
     return token ? new HttpHeaders({ 'Authorization': `Bearer ${token}` }) : new HttpHeaders();
   }
 
-  // Para Administradores
   obtenerTodasLasEmergencias(): Observable<RespuestaApiEmergencias> {
     return this.http.get<RespuestaApiEmergencias>(`${this.apiUrl}/api/emergencias/`, { headers: this.getHeaders() });
   }
 
-  // Para Clientes
   obtenerMisEmergencias(): Observable<RespuestaApiEmergencias> {
     return this.http.get<RespuestaApiEmergencias>(`${this.apiUrl}/api/emergencias/mis-emergencias`, { headers: this.getHeaders() });
   }
 
-  // Para Mecánicos / Gerentes
   obtenerEmergenciasMiTaller(): Observable<RespuestaApiEmergencias> {
     return this.http.get<RespuestaApiEmergencias>(`${this.apiUrl}/api/emergencias/mi-taller`, { headers: this.getHeaders() });
+  }
+
+  // --- NUEVO ENDPOINT DE EVIDENCIAS ---
+  obtenerEvidenciasEmergencia(id: number): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/api/emergencias/${id}/evidencias`, { headers: this.getHeaders() });
   }
 
   crearEmergencia(datos: any): Observable<any> {

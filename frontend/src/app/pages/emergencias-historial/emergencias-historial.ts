@@ -28,9 +28,15 @@ export class EmergenciasHistorialComponent implements OnInit {
   textoBusqueda: string = '';
   filtroEstado: string = ''; 
 
-  // Control de Modales
+  // Control de Modal: Cotización
   mostrarModalCotizacion: boolean = false;
   procesandoAccion: boolean = false;
+  
+  // Control de Modal: Detalles y Evidencias
+  mostrarModalDetalles: boolean = false;
+  cargandoEvidencias: boolean = false;
+  evidenciasDetalle: any[] = [];
+  
   emergenciaSeleccionada: Emergencia | null = null;
   
   cotizacionForm = {
@@ -40,7 +46,7 @@ export class EmergenciasHistorialComponent implements OnInit {
 
   ngOnInit() {
     if (isPlatformBrowser(this.platformId)) {
-      this.usuarioActual = this.authService.obtenerUsuario() || this.authService.obtenerUsuario();
+      this.usuarioActual = this.authService.obtenerUsuario();
       if (this.usuarioActual) {
         this.cargarEmergencias();
       }
@@ -52,7 +58,7 @@ export class EmergenciasHistorialComponent implements OnInit {
     const rol = this.usuarioActual.nombre_rol.toUpperCase();
 
     let peticion$;
-    if (rol === 'ADMINISTRADOR' || rol == 'GERENTE TALLER') {
+    if (rol === 'ADMINISTRADOR' || rol === 'GERENTE TALLER') {
       peticion$ = this.emergenciasService.obtenerTodasLasEmergencias();
     } else if (rol === 'CLIENTE') {
       peticion$ = this.emergenciasService.obtenerMisEmergencias();
@@ -83,11 +89,9 @@ export class EmergenciasHistorialComponent implements OnInit {
 
   aplicarFiltros() {
     let filtradas = [...this.emergencias];
-
     if (this.filtroEstado) {
       filtradas = filtradas.filter(e => e.estado.toUpperCase() === this.filtroEstado.toUpperCase());
     }
-
     if (this.textoBusqueda) {
       const busqueda = this.textoBusqueda.toLowerCase();
       filtradas = filtradas.filter(e => 
@@ -95,7 +99,6 @@ export class EmergenciasHistorialComponent implements OnInit {
         (e.nombre_usuario && e.nombre_usuario.toLowerCase().includes(busqueda))
       );
     }
-
     this.emergenciasFiltradas = filtradas;
   }
 
@@ -110,7 +113,45 @@ export class EmergenciasHistorialComponent implements OnInit {
     return ['ADMINISTRADOR','GERENTE TALLER', 'MECANICO', 'MECÁNICO'].includes(rol);
   }
 
-  // --- ACCIÓN 1: ABRIR SUBAS DE COTIZACIÓN (ESTADO PENDIENTE) ---
+  // --- MODAL DETALLES Y EVIDENCIAS ---
+  abrirModalDetalles(emergencia: Emergencia) {
+    this.emergenciaSeleccionada = emergencia;
+    this.mostrarModalDetalles = true;
+    this.cargandoEvidencias = true;
+    this.evidenciasDetalle = [];
+
+    this.emergenciasService.obtenerEvidenciasEmergencia(emergencia.nro_emergencia).subscribe({
+      next: (res) => {
+        this.ngZone.run(() => {
+          if (res.success) this.evidenciasDetalle = res.data;
+          this.cargandoEvidencias = false;
+          this.cdr.detectChanges();
+        });
+      },
+      error: () => {
+        this.ngZone.run(() => {
+          this.cargandoEvidencias = false;
+          this.cdr.detectChanges();
+        });
+      }
+    });
+  }
+
+  cerrarModalDetalles() {
+    this.mostrarModalDetalles = false;
+    // Si no vamos a cotizar, limpiamos la selección
+    if (!this.mostrarModalCotizacion) {
+      this.emergenciaSeleccionada = null;
+    }
+  }
+
+  pasarACotizacionDesdeDetalles() {
+    this.mostrarModalDetalles = false; // Cerramos detalles
+    this.cotizacionForm = { precio_estimado: null, tiempo_estimado_minutos: null };
+    this.mostrarModalCotizacion = true; // Abrimos cotización
+  }
+
+  // --- MODAL COTIZACIÓN ---
   abrirModalCotizacion(emergencia: Emergencia) {
     this.emergenciaSeleccionada = emergencia;
     this.cotizacionForm = { precio_estimado: null, tiempo_estimado_minutos: null };
@@ -130,7 +171,6 @@ export class EmergenciasHistorialComponent implements OnInit {
     }
     this.procesandoAccion = true;
     
-    // Simulación fluida en UI, lista para acoplar tu POST de ofertas
     setTimeout(() => {
       this.ngZone.run(() => {
         alert(`Oferta registrada: Bs. ${this.cotizacionForm.precio_estimado} en ${this.cotizacionForm.tiempo_estimado_minutos} mins.`);
@@ -140,17 +180,14 @@ export class EmergenciasHistorialComponent implements OnInit {
     }, 1200);
   }
 
-  // --- ACCIÓN 2: INICIAR TRANSITO / TRACKING (ESTADO ACEPTADA -> EN CURSO) ---
+  // --- TRACKING ---
   iniciarTracking(emergencia: Emergencia) {
     if (confirm('¿Confirmas que estás iniciando el viaje hacia la ubicación del incidente? El cliente podrá ver tu ruta.')) {
       this.cargando = true;
-      
-      // Llamada real a tu endpoint PUT /{nro_emergencia}
       this.emergenciasService.actualizarEmergencia(emergencia.nro_emergencia, { estado: 'EN CURSO' }).subscribe({
-        next: (res) => {
+        next: () => {
           this.ngZone.run(() => {
             this.cargarEmergencias();
-            // Redirigir al mapa interactivo inmediatamente para iniciar el tracking real
             this.router.navigate(['/emergencias-actuales']);
           });
         },
@@ -165,7 +202,6 @@ export class EmergenciasHistorialComponent implements OnInit {
     }
   }
 
-  // --- ACCIÓN 3: ENLAZAR AL MAPA DE MONITOREO (ESTADOS ACEPTADA / EN CURSO) ---
   verTracking() {
     this.router.navigate(['/emergencias-actuales']);
   }
