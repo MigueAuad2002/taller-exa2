@@ -25,6 +25,22 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  void _usarUsuarioDemo() {
+    setState(() {
+      _ciController.text = '12345678';
+      _passController.text = '12345678';
+      _obscurePass = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Usuario demo cargado.'),
+        backgroundColor: AppTheme.success,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
@@ -49,6 +65,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -68,10 +86,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 10),
                       const EvLogoDivider(),
                       const SizedBox(height: 36),
-                      Text('Acceso al Sistema', style: Theme.of(context).textTheme.displayMedium),
+                      Text(
+                        'Acceso al Sistema',
+                        style: Theme.of(context).textTheme.displayMedium,
+                      ),
                       const SizedBox(height: 6),
-                      Text('Portal exclusivo para personal autorizado.', style: Theme.of(context).textTheme.bodyMedium),
-                      const SizedBox(height: 32),
+                      Text(
+                        'Portal exclusivo para personal autorizado.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 18),
+                      _DemoUserCard(
+                        onUse: _usarUsuarioDemo,
+                      ),
+                      const SizedBox(height: 24),
                       EvTextField(
                         label: 'CARNET DE IDENTIDAD',
                         hint: 'Ej: 9781936',
@@ -165,6 +193,97 @@ class _DarkChip extends StatelessWidget {
         const SizedBox(width: 10),
         Text(text, style: const TextStyle(color: Color(0xFFCED4DA), fontSize: 13, fontWeight: FontWeight.w500)),
       ],
+    );
+  }
+}
+
+class _DemoUserCard extends StatelessWidget {
+  final VoidCallback onUse;
+
+  const _DemoUserCard({
+    required this.onUse,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppTheme.primary.withOpacity(0.18),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(
+              Icons.account_circle_outlined,
+              color: AppTheme.primary,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'USUARIO DEMO',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.primary,
+                    letterSpacing: 1,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'CI: 12345678  ·  Pass: 12345678',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            height: 36,
+            child: ElevatedButton(
+              onPressed: onUse,
+              style: ElevatedButton.styleFrom(
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              child: const Text(
+                'USAR',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

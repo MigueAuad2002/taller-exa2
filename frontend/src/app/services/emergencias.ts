@@ -18,6 +18,7 @@ export interface Emergencia {
   id_empresa?: number;
   nombre_taller?: string;
   nombre_usuario?:string;
+  telefono_cliente?:string;
 }
 
 export interface RespuestaApiEmergencias {
@@ -52,5 +53,17 @@ export class EmergenciasService {
   // Para Mecánicos / Gerentes
   obtenerEmergenciasMiTaller(): Observable<RespuestaApiEmergencias> {
     return this.http.get<RespuestaApiEmergencias>(`${this.apiUrl}/api/emergencias/mi-taller`, { headers: this.getHeaders() });
+  }
+
+  crearEmergencia(datos: any): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/api/emergencias/`, datos, { headers: this.getHeaders() });
+  }
+
+  actualizarEmergencia(id: number, datos: any): Observable<any> {
+    return this.http.put<any>(`${this.apiUrl}/api/emergencias/${id}`, datos, { headers: this.getHeaders() });
+  }
+
+  eliminarEmergencia(id: number): Observable<any> {
+    return this.http.delete<any>(`${this.apiUrl}/api/emergencias/${id}`, { headers: this.getHeaders() });
   }
 }

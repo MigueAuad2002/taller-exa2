@@ -90,6 +90,7 @@ class EvTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final Widget? suffixIcon;
   final bool autofocus;
+  final TextCapitalization textCapitalization;
 
   const EvTextField({
     super.key,
@@ -101,6 +102,7 @@ class EvTextField extends StatelessWidget {
     this.keyboardType,
     this.suffixIcon,
     this.autofocus = false,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   @override
@@ -119,6 +121,7 @@ class EvTextField extends StatelessWidget {
           keyboardType: keyboardType,
           validator: validator,
           autofocus: autofocus,
+          textCapitalization: textCapitalization,
           style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
           decoration: InputDecoration(
             hintText: hint,

@@ -8,6 +8,7 @@ class EmergenciaService {
     required String tipoEmergencia,
     required double latitud,
     required double longitud,
+    required int nroVehiculo,
     required List<String> evidencias,
     String prioridad = 'MEDIA',
     String descripcion = '',
@@ -21,9 +22,8 @@ class EmergenciaService {
           'latitud': latitud,
           'longitud': longitud,
           'prioridad': prioridad,
+          'nro_vehiculo': nroVehiculo,
           'evidencias': evidencias,
-
-          // El backend actual los ignora, pero los mandamos por si luego los usas.
           'descripcion': descripcion,
           'referencia': referencia,
         },
@@ -45,9 +45,11 @@ class EmergenciaService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> listarMisEmergencias() async {
+  Future<List<Map<String, dynamic>>> listarMisEmergencias() async 
+  {
     try {
       final response = await ApiClient.dio.get('$_basePath/mis-emergencias');
+
       final data = response.data;
 
       if (data is! Map) {
@@ -66,7 +68,7 @@ class EmergenciaService {
     } on DioException catch (e) {
       throw Exception(_parsearErrorDio(e));
     }
-  }
+}
 
   String _parsearErrorDio(DioException e) {
     if (e.response?.data != null) {
@@ -113,6 +115,35 @@ class EmergenciaService {
         return 'Error interno del servidor. Intentá más tarde.';
       default:
         return 'Ocurrió un error inesperado. Intentá de nuevo.';
+    }
+  }
+
+  Future<Map<String, dynamic>> agregarEvidencia({
+    required int nroEmergencia,
+    required String urlEvidencia,
+  }) async {
+    try {
+      final response = await ApiClient.dio.put(
+        '$_basePath/$nroEmergencia',
+        data: {
+          'añadir_evidencias': [urlEvidencia],
+          'eliminar_evidencias': [],
+        },
+      );
+
+      final data = response.data;
+
+      if (data is! Map) {
+        throw Exception('Respuesta inválida del servidor.');
+      }
+
+      if (data['success'] != true) {
+        throw Exception(data['message'] ?? 'No se pudo agregar la evidencia.');
+      }
+
+      return Map<String, dynamic>.from(data);
+    } on DioException catch (e) {
+      throw Exception(_parsearErrorDio(e));
     }
   }
 }

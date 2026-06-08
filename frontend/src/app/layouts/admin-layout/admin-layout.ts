@@ -62,7 +62,7 @@ export class AdminLayoutComponent implements OnInit {
       expandido: false,
       submenus: [
         { nombre: 'Emergencias Actuales', ruta: '/emergencias-actuales' },
-        { nombre: 'Historial Atendidas', ruta: '/emergencias-historial' }
+        { nombre: 'Visualizar Emergencias', ruta: '/emergencias-historial' }
       ]
     }    
   ];

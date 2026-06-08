@@ -5,15 +5,15 @@ from app.utils.security import verificar_token
 router = APIRouter(tags=["Emergencias"])
 
 ROLES_ADMIN_CLIENTE = ['ADMINISTRADOR', 'CLIENTE']
-ROLES_ACTUALIZAR = ROLES_ADMIN_CLIENTE + ['MECANICO', 'MECÁNICO', 'TECNICO', 'TÉCNICO']
+ROLES_ACTUALIZAR = ROLES_ADMIN_CLIENTE + ['MECANICO']
 
 def normalizar_rol(rol_usuario: str):
     return rol_usuario.strip().upper() if rol_usuario else ""
 
 @router.get('/')
 def get_todas_las_emergencias(token_data: dict = Depends(verificar_token)):
-    if normalizar_rol(token_data.get('nombre_rol')) != 'ADMINISTRADOR':
-        raise HTTPException(status_code=403, detail="Solo administradores.")
+    if normalizar_rol(token_data.get('nombre_rol')) not in ('ADMINISTRADOR','GERENTE TALLER'):
+        raise HTTPException(status_code=403, detail="Solo administradores y gerentes.")
     return emergencias_services.listar_todas_las_emergencias()
 
 @router.get('/mis-emergencias')

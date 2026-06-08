@@ -6,6 +6,8 @@ import '../widgets/ev_widgets.dart';
 import '../services/emergencia_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../services/vehiculo_service.dart';
+import 'vehiculos_screen.dart';
 
 // Tipos de emergencia disponibles
 const _tiposEmergencia = [
@@ -59,14 +61,22 @@ class _SolicitarEmergenciaScreenState
   bool _cargandoUbicacion = false;
   bool _enviando = false;
   String? _errorUbicacion;
+  double? _latitudSeleccionada;
+  double? _longitudSeleccionada;
 
-  // Paso actual del stepper: 0 = tipo, 1 = ubicación, 2 = detalles
+  // Paso actual del stepper: 0 = vehiculo, 1 = tipo, 2 = ubicacion, 3 = detallees
   int _pasoActual = 0;
+
+  List<Map<String, dynamic>> _vehiculos = [];
+  Map<String, dynamic>? _vehiculoSeleccionado;
+  bool _cargandoVehiculos = false;
+  String? _errorVehiculos;
 
   @override
   void initState() {
     super.initState();
-    _obtenerUbicacion(); // intentar al abrir
+    _cargarVehiculos();
+    _obtenerUbicacion();
   }
 
   @override
@@ -103,7 +113,11 @@ class _SolicitarEmergenciaScreenState
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      setState(() => _posicion = pos);
+      setState(() {
+        _posicion = pos;
+        _latitudSeleccionada = pos.latitude;
+        _longitudSeleccionada = pos.longitude;
+      });
     } catch (e) {
       setState(() => _errorUbicacion = e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -111,25 +125,63 @@ class _SolicitarEmergenciaScreenState
     }
   }
 
+  //CARGAR VEHICULOS
+  Future<void> _cargarVehiculos() async {
+    setState(() {
+      _cargandoVehiculos = true;
+      _errorVehiculos = null;
+    });
+
+    try {
+      final lista = await VehiculoService().listarMisVehiculos();
+
+      if (!mounted) return;
+
+      setState(() {
+        _vehiculos = lista;
+        _cargandoVehiculos = false;
+
+        if (lista.length == 1) {
+          _vehiculoSeleccionado = lista.first;
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _errorVehiculos = e.toString().replaceAll('Exception: ', '');
+        _cargandoVehiculos = false;
+      });
+    }
+  }
+
   // ── Enviar ─────────────────────────────────────────────────────────────
   Future<void> _enviarEmergencia() async {
+    if (_vehiculoSeleccionado == null) {
+      _mostrarError('Seleccioná el vehículo de la emergencia.');
+      return;
+    }
+
     if (_tipoSeleccionado == null) {
       _mostrarError('Seleccioná el tipo de emergencia.');
       return;
     }
-    if (_posicion == null) {
-      _mostrarError('No se pudo obtener tu ubicación. Intentá de nuevo.');
+
+    if (_latitudSeleccionada == null || _longitudSeleccionada == null) {
+      _mostrarError('No se pudo definir tu ubicación. Intentá de nuevo.');
       return;
     }
-    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _enviando = true);
 
     try {
       final resultado = await EmergenciaService().crearEmergencia(
         tipoEmergencia: _tipoSeleccionado!,
-        latitud: _posicion!.latitude,
-        longitud: _posicion!.longitude,
+        latitud: _latitudSeleccionada!,
+        longitud: _longitudSeleccionada!,
+        nroVehiculo: int.parse(
+          _vehiculoSeleccionado!['nro_vehiculo'].toString(),
+        ),
         prioridad: 'MEDIA',
         descripcion: '',
         referencia: '',
@@ -236,39 +288,73 @@ class _SolicitarEmergenciaScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // PASO 0 — Tipo de emergencia
-                    _PasoTipo(
+                    // PASO 1 — ELEGIR VEHICULO
+                    _PasoVehiculo(
                       activo: _pasoActual == 0,
                       completado: _pasoActual > 0,
+                      vehiculos: _vehiculos,
+                      vehiculoSeleccionado: _vehiculoSeleccionado,
+                      cargando: _cargandoVehiculos,
+                      error: _errorVehiculos,
+                      onSeleccionar: (vehiculo) {
+                        setState(() {
+                          _vehiculoSeleccionado = vehiculo;
+                          _pasoActual = 1;
+                        });
+                      },
+                      onReintentar: _cargarVehiculos,
+                      onAgregarVehiculo: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const VehiculosScreen(),
+                          ),
+                        );
+
+                        await _cargarVehiculos();
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    // PASO 1 — Tipo de emergencia
+                    _PasoTipo(
+                      activo: _pasoActual == 1,
+                      completado: _pasoActual > 1,
                       tipoSeleccionado: _tipoSeleccionado,
                       onTipoSeleccionado: (tipo) {
                         setState(() {
                           _tipoSeleccionado = tipo;
-                          _pasoActual = 1;
+                          _pasoActual = 2;
                         });
                       },
                     ),
-                    const SizedBox(height: 16),
-
                     // PASO 1 — Ubicación GPS
                     _PasoUbicacion(
-                      activo: _pasoActual == 1,
-                      completado: _pasoActual > 1,
+                      activo: _pasoActual == 2,
+                      completado: _pasoActual > 2,
                       posicion: _posicion,
                       cargando: _cargandoUbicacion,
                       error: _errorUbicacion,
                       onReintentar: _obtenerUbicacion,
+                      latitudSeleccionada: _latitudSeleccionada,
+                      longitudSeleccionada: _longitudSeleccionada,
+                      onMoverPin: (punto) {
+                        setState(() {
+                          _latitudSeleccionada = punto.latitude;
+                          _longitudSeleccionada = punto.longitude;
+                        });
+                      },
                       onConfirmar: _posicion != null
-                          ? () => setState(() => _pasoActual = 2)
+                          ? () => setState(() => _pasoActual = 3)
                           : null,
                     ),
-                    const SizedBox(height: 16),
-
                     // PASO 2 — Detalles
                     _PasoDetalles(
-                      activo: _pasoActual == 2,
+                      activo: _pasoActual == 3,
                       tipoSeleccionado: _tipoSeleccionado,
                       posicion: _posicion,
+                      latitudSeleccionada: _latitudSeleccionada,
+                      longitudSeleccionada: _longitudSeleccionada,
+                      vehiculoSeleccionado: _vehiculoSeleccionado,
                     ),
                   ],
                 ),
@@ -277,7 +363,7 @@ class _SolicitarEmergenciaScreenState
           ),
 
           // ── Botón enviar (solo en paso 2) ──────────────────────────
-          if (_pasoActual == 2)
+          if (_pasoActual == 3)
             _BarraEnviar(
               enviando: _enviando,
               onEnviar: _enviarEmergencia,
@@ -295,7 +381,7 @@ class _StepIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const pasos = ['Tipo', 'Ubicación', 'Confirmar'];
+    const pasos = ['Vehículo', 'Tipo', 'Ubicación', 'Confirmar'];
     return Container(
       color: AppTheme.surface,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
@@ -368,6 +454,333 @@ class _StepIndicator extends StatelessWidget {
   }
 }
 
+class _PasoVehiculo extends StatelessWidget {
+  final bool activo;
+  final bool completado;
+  final List<Map<String, dynamic>> vehiculos;
+  final Map<String, dynamic>? vehiculoSeleccionado;
+  final bool cargando;
+  final String? error;
+  final void Function(Map<String, dynamic>) onSeleccionar;
+  final VoidCallback onReintentar;
+  final VoidCallback onAgregarVehiculo;
+
+  const _PasoVehiculo({
+    required this.activo,
+    required this.completado,
+    required this.vehiculos,
+    required this.vehiculoSeleccionado,
+    required this.cargando,
+    required this.error,
+    required this.onSeleccionar,
+    required this.onReintentar,
+    required this.onAgregarVehiculo,
+  });
+
+  String _texto(dynamic valor) {
+    if (valor == null) return 'No registrado';
+    final texto = valor.toString().trim();
+    return texto.isEmpty ? 'No registrado' : texto;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _PasoCard(
+      numero: '01',
+      titulo: 'Vehículo',
+      subtitulo: 'Seleccioná el vehículo con el problema',
+      activo: activo,
+      completado: completado,
+      child: Column(
+        children: [
+          if (cargando)
+            const _VehiculoLoadingBox()
+          else if (error != null)
+            _VehiculoErrorBox(
+              mensaje: error!,
+              onReintentar: onReintentar,
+            )
+          else if (vehiculos.isEmpty)
+            _SinVehiculosBox(
+              onAgregarVehiculo: onAgregarVehiculo,
+            )
+          else
+            Column(
+              children: vehiculos.map((vehiculo) {
+                final seleccionado = vehiculoSeleccionado?['nro_vehiculo']
+                        ?.toString() ==
+                    vehiculo['nro_vehiculo']?.toString();
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: InkWell(
+                    onTap: () => onSeleccionar(vehiculo),
+                    borderRadius: BorderRadius.circular(8),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: seleccionado
+                            ? AppTheme.primary.withOpacity(0.08)
+                            : AppTheme.background,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: seleccionado
+                              ? AppTheme.primary
+                              : AppTheme.border,
+                          width: seleccionado ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: seleccionado
+                                  ? AppTheme.primary
+                                  : AppTheme.surface,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: seleccionado
+                                    ? AppTheme.primary
+                                    : AppTheme.border,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.directions_car_rounded,
+                              color: seleccionado
+                                  ? Colors.white
+                                  : AppTheme.primary,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _texto(vehiculo['placa']).toUpperCase(),
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppTheme.textPrimary,
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  '${_texto(vehiculo['marca_modelo'])} · ${_texto(vehiculo['anio'])}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            seleccionado
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            color: seleccionado
+                                ? AppTheme.primary
+                                : AppTheme.textHint,
+                            size: 22,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          if (!cargando && vehiculos.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            OutlinedButton.icon(
+              onPressed: onAgregarVehiculo,
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: const Text('Agregar otro vehículo'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 44),
+                textStyle: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _VehiculoLoadingBox extends StatelessWidget {
+  const _VehiculoLoadingBox();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: AppTheme.primary.withOpacity(0.2),
+        ),
+      ),
+      child: const Row(
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppTheme.primary,
+            ),
+          ),
+          SizedBox(width: 10),
+          Text(
+            'Cargando vehículos...',
+            style: TextStyle(
+              fontSize: 13,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VehiculoErrorBox extends StatelessWidget {
+  final String mensaje;
+  final VoidCallback onReintentar;
+
+  const _VehiculoErrorBox({
+    required this.mensaje,
+    required this.onReintentar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.error.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: AppTheme.error.withOpacity(0.25),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                size: 16,
+                color: AppTheme.error,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  mensaje,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.error,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onReintentar,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Reintentar'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 42),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SinVehiculosBox extends StatelessWidget {
+  final VoidCallback onAgregarVehiculo;
+
+  const _SinVehiculosBox({
+    required this.onAgregarVehiculo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppTheme.primary.withOpacity(0.18),
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.directions_car_rounded,
+              color: AppTheme.primary,
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'No tienes vehículos registrados',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Registra un vehículo antes de solicitar auxilio.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          EvPrimaryButton(
+            label: 'Registrar Vehículo',
+            onPressed: onAgregarVehiculo,
+          ),
+        ],
+      ),
+    );
+  }
+}
 // ── Paso 0 — Tipo ─────────────────────────────────────────────────────────────
 class _PasoTipo extends StatelessWidget {
   final bool activo;
@@ -385,7 +798,7 @@ class _PasoTipo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _PasoCard(
-      numero: '01',
+      numero: '02',
       titulo: 'Tipo de emergencia',
       subtitulo: 'Seleccioná qué le pasó a tu vehículo',
       activo: activo,
@@ -457,6 +870,10 @@ class _PasoUbicacion extends StatelessWidget {
   final VoidCallback onReintentar;
   final VoidCallback? onConfirmar;
 
+  final double? latitudSeleccionada;
+  final double? longitudSeleccionada;
+  final void Function(LatLng) onMoverPin;
+
   const _PasoUbicacion({
     required this.activo,
     required this.completado,
@@ -465,12 +882,15 @@ class _PasoUbicacion extends StatelessWidget {
     required this.error,
     required this.onReintentar,
     required this.onConfirmar,
+    required this.latitudSeleccionada,
+    required this.longitudSeleccionada,
+    required this.onMoverPin,
   });
 
   @override
   Widget build(BuildContext context) {
     return _PasoCard(
-      numero: '02',
+      numero: '03',
       titulo: 'Tu ubicación',
       subtitulo: 'Necesitamos saber dónde estás',
       activo: activo,
@@ -540,8 +960,8 @@ class _PasoUbicacion extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'Lat: ${posicion!.latitude.toStringAsFixed(6)}\n'
-                            'Lng: ${posicion!.longitude.toStringAsFixed(6)}',
+                          'Lat: ${latitudSeleccionada!.toStringAsFixed(6)}\n'
+                          'Lng: ${longitudSeleccionada!.toStringAsFixed(6)}',
                             style: const TextStyle(
                               fontSize: 11,
                               fontFamily: 'monospace',
@@ -559,9 +979,31 @@ class _PasoUbicacion extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           _MapaUbicacion(
-                            latitud: posicion!.latitude,
-                            longitud: posicion!.longitude,
+                            latitud: latitudSeleccionada!,
+                            longitud: longitudSeleccionada!,
+                            onMoverPin: onMoverPin,
                           ),
+                          const SizedBox(height: 8),
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.touch_app_rounded,
+                                  size: 13,
+                                  color: AppTheme.textSecondary,
+                                ),
+                                SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Toca el mapa para ajustar el punto exacto de la emergencia.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.textSecondary,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                         ],
                       )
                     : Column(
@@ -636,23 +1078,43 @@ class _PasoDetalles extends StatelessWidget {
   final bool activo;
   final String? tipoSeleccionado;
   final Position? posicion;
+  final Map<String, dynamic>? vehiculoSeleccionado;
+  final double? latitudSeleccionada;
+  final double? longitudSeleccionada;
 
   const _PasoDetalles({
     required this.activo,
     required this.tipoSeleccionado,
     required this.posicion,
+    required this.vehiculoSeleccionado,
+    required this.latitudSeleccionada,
+    required this.longitudSeleccionada
   });
+
+  String _texto(dynamic valor) {
+    if (valor == null) return 'No registrado';
+    final texto = valor.toString().trim();
+    return texto.isEmpty ? 'No registrado' : texto;
+  }
 
   @override
   Widget build(BuildContext context) {
     return _PasoCard(
-      numero: '03',
+      numero: '04',
       titulo: 'Confirmar solicitud',
       subtitulo: 'Revisá los datos antes de enviar',
       activo: activo,
       completado: false,
       child: Column(
         children: [
+          _ResumenItem(
+            icon: Icons.directions_car_rounded,
+            label: 'VEHÍCULO',
+            value: vehiculoSeleccionado == null
+                ? 'NO SELECCIONADO'
+                : '${_texto(vehiculoSeleccionado!['placa']).toUpperCase()} · ${_texto(vehiculoSeleccionado!['marca_modelo'])} · ${_texto(vehiculoSeleccionado!['anio'])}',
+          ),
+          const SizedBox(height: 12),
           _ResumenItem(
             icon: Icons.car_crash_outlined,
             label: 'TIPO DE EMERGENCIA',
@@ -662,9 +1124,9 @@ class _PasoDetalles extends StatelessWidget {
           _ResumenItem(
             icon: Icons.location_on_outlined,
             label: 'UBICACIÓN',
-            value: posicion == null
+            value: latitudSeleccionada == null || longitudSeleccionada == null
                 ? 'NO DISPONIBLE'
-                : 'Lat: ${posicion!.latitude.toStringAsFixed(6)}\nLng: ${posicion!.longitude.toStringAsFixed(6)}',
+                : 'Lat: ${latitudSeleccionada!.toStringAsFixed(6)}\nLng: ${longitudSeleccionada!.toStringAsFixed(6)}',
           ),
           const SizedBox(height: 12),
           const _ResumenItem(
@@ -693,7 +1155,7 @@ class _PasoDetalles extends StatelessWidget {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Se enviará tu emergencia con tu ubicación actual.',
+                    'Se enviará tu emergencia con el vehículo seleccionado y tu ubicación actual.',
                     style: TextStyle(
                       fontSize: 12,
                       color: AppTheme.textSecondary,
@@ -901,10 +1363,12 @@ class _PasoCard extends StatelessWidget {
 class _MapaUbicacion extends StatelessWidget {
   final double latitud;
   final double longitud;
+  final void Function(LatLng) onMoverPin;
 
   const _MapaUbicacion({
     required this.latitud,
     required this.longitud,
+    required this.onMoverPin,
   });
 
   @override
@@ -924,10 +1388,14 @@ class _MapaUbicacion extends StatelessWidget {
         options: MapOptions(
           initialCenter: punto,
           initialZoom: 16,
+          onTap: (tapPosition, point) {
+            onMoverPin(point);
+          },
           interactionOptions: const InteractionOptions(
             flags: InteractiveFlag.drag |
                 InteractiveFlag.pinchZoom |
-                InteractiveFlag.doubleTapZoom,
+                InteractiveFlag.doubleTapZoom |
+                InteractiveFlag.scrollWheelZoom,
           ),
         ),
         children: [
@@ -939,12 +1407,12 @@ class _MapaUbicacion extends StatelessWidget {
             markers: [
               Marker(
                 point: punto,
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 child: const Icon(
                   Icons.location_on_rounded,
                   color: AppTheme.error,
-                  size: 36,
+                  size: 40,
                 ),
               ),
             ],

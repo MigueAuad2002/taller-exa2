@@ -12,6 +12,7 @@ import { TalleresComponent } from './pages/talleres/talleres';
 import { MapaTalleresComponent } from './pages/mapa-talleres/mapa-talleres';
 import { ServiciosTallerComponent } from './pages/servicios-taller/servicios-taller';
 import { EmergenciasActualesComponent } from './pages/emergencias-actuales/emergencias-actuales';
+import { EmergenciasHistorialComponent } from './pages/emergencias-historial/emergencias-historial';
 
 //LAYOUTS
 import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout';
@@ -47,7 +48,8 @@ export const routes: Routes = [
             { path:'talleres', component: TalleresComponent },
             { path:'mapa-talleres', component: MapaTalleresComponent },
             { path:'talleres/:id/servicios', component:ServiciosTallerComponent },
-            { path:'emergencias-actuales',component: EmergenciasActualesComponent }
+            { path:'emergencias-actuales',component: EmergenciasActualesComponent },
+            { path:'emergencias-historial', component:EmergenciasHistorialComponent }
         ]
     },
     { path: '**', redirectTo: 'login' }

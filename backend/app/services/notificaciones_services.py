@@ -21,3 +21,6 @@ async def enviar_push_nueva_emergencia(nro_emergencia: int, tipo_emergencia: str
     for u in usuarios_destino:
         nro_usu = u['nro_usuario']
         await manager.send_personal_message(mensaje_push, nro_usu)
+
+
+#async def enviar_push_nueva_cotizacion(nro_cotizacion):

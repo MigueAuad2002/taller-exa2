@@ -2,8 +2,7 @@ from fastapi import BackgroundTasks
 from app.repos import emergencias_repos
 from app.services import notificaciones_services
 
-# --- FUNCIONES DE LECTURA (GET) ---
-
+#FUNCIONES DE LECTURA (GET)
 def listar_todas_las_emergencias():
     emergencias = emergencias_repos.obtener_todas_las_emergencias()
     return {"success": True, "message": "Emergencias recuperadas exitosamente", "data": emergencias}
@@ -18,8 +17,7 @@ def listar_emergencias_mi_taller(nro_usuario: int):
     emergencias = emergencias_repos.obtener_emergencias_por_taller_del_mecanico(nro_usuario)
     return {"success": True, "message": "Emergencias del taller del mecánico recuperadas exitosamente", "data": emergencias}
 
-# --- FUNCIONES DE ESCRITURA CON NOTIFICACIONES ---
-
+#FUNCIONES DE ESCRITURA CON NOTIFICACIONES
 def normalizar_rol(rol_usuario: str):
     return rol_usuario.strip().upper() if rol_usuario else ""
 
@@ -30,7 +28,12 @@ def registrar_emergencia(data: dict, token_data: dict, background_tasks: Backgro
     longitud = data.get('longitud')
     prioridad = data.get('prioridad', 'MEDIA')
     
-    # 1. Validaciones por ROL
+    #SI MANDAN LA LLAVE PERO VACIA RECLAMAMOS
+    nro_vehiculo = data.get('nro_vehiculo', None)
+    if 'nro_vehiculo' in data and not nro_vehiculo:
+        raise ValueError("Si provee la llave 'nro_vehiculo', no puede estar vacía.")
+    
+    #VALIDACIONES POR ROL
     if rol == 'ADMINISTRADOR':
         nro_usuario = data.get('nro_usuario')
         if not nro_usuario:
@@ -44,14 +47,14 @@ def registrar_emergencia(data: dict, token_data: dict, background_tasks: Backgro
         raise ValueError("Rol no autorizado para crear emergencias.")
 
     nuevo_id = emergencias_repos.crear_emergencia_db(
-        tipo_emergencia.upper(), latitud, longitud, 'PENDIENTE', prioridad.upper(), nro_usuario
+        tipo_emergencia.upper(), latitud, longitud, 'PENDIENTE', prioridad.upper(), nro_usuario, nro_vehiculo
     )
 
     if rol == 'CLIENTE' and data.get('evidencias'):
         for url in data.get('evidencias'):
             emergencias_repos.agregar_evidencia_db(nuevo_id, url)
 
-    # --- DISPARAR NOTIFICACIÓN EN SEGUNDO PLANO ---
+    #DISPARAR NOTIFICACIÓN EN SEGUNDO PLANO
     background_tasks.add_task(
         notificaciones_services.enviar_push_nueva_emergencia, 
         nuevo_id, 

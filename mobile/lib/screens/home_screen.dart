@@ -5,6 +5,10 @@ import '../theme/app_theme.dart';
 import '../services/auth_provider.dart';
 import '../services/token_storage.dart';
 import 'solicitar_emergencia_screen.dart';
+import 'mis_emergencias_screen.dart';
+import 'perfil_screen.dart';
+import 'vehiculos_screen.dart';
+import '../services/notificacion_ws_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,11 +20,18 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String _nombreUsuario = '';
   String _rolUsuario = '';
+  
+  final NotificacionWsService _wsService = NotificacionWsService();
+  bool _wsActivo = false;
 
   @override
   void initState() {
     super.initState();
     _cargarDatosUsuario();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _iniciarWebSocket();
+    });
   }
 
   Future<void> _cargarDatosUsuario() async {
@@ -32,6 +43,53 @@ class _HomeScreenState extends State<HomeScreen> {
         _rolUsuario = rol;
       });
     }
+  }
+
+  Future<void> _iniciarWebSocket() async {
+    await _wsService.conectar(
+      onEstado: (activo) {
+        if (!mounted) return;
+
+        setState(() {
+          _wsActivo = activo;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              activo ? 'WebSocket activado.' : 'WebSocket desactivado.',
+            ),
+            backgroundColor: activo ? AppTheme.success : AppTheme.error,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+      onMensaje: (mensaje) {
+        if (!mounted) return;
+
+        final titulo = mensaje['titulo']?.toString() ?? 'Notificación';
+        final cuerpo = mensaje['cuerpo']?.toString() ?? 'Mensaje recibido.';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$titulo\n$cuerpo'),
+            backgroundColor: AppTheme.primary,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      },
+      onError: (error) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error WebSocket: $error'),
+            backgroundColor: AppTheme.error,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      },
+    );
   }
 
   String get _primerNombre {
@@ -89,6 +147,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+  
+  @override
+  void dispose() {
+    _wsService.desconectar();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +166,14 @@ class _HomeScreenState extends State<HomeScreen> {
             nombreUsuario: _nombreUsuario,
             rolUsuario: _rolUsuario,
             onLogout: () => _confirmarLogout(context),
+            onProfile: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const PerfilScreen(),
+                ),
+              );
+            },
           ),
 
           // ── Contenido scrollable ──────────────────────────────────────
@@ -129,7 +201,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: AppTheme.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  //const SizedBox(height: 24),
+                  const SizedBox(height: 10),
+                  _WsStatusChip(activo: _wsActivo),
 
                   // ── Botón SOS destacado ─────────────────────────────
                   _SosButton(
@@ -158,7 +232,25 @@ class _HomeScreenState extends State<HomeScreen> {
                         title: 'Mis Emergencias',
                         subtitle: 'Historial de solicitudes',
                         onTap: () {
-                          // TODO: navegar a historial
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MisEmergenciasScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      _ModuleCard(
+                        icon: Icons.directions_car_rounded,
+                        title: 'Mis Vehículos',
+                        subtitle: 'Registrar y editar autos',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const VehiculosScreen(),
+                            ),
+                          );
                         },
                       ),
                       _ModuleCard(
@@ -170,19 +262,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
                       ),
                       _ModuleCard(
-                        icon: Icons.chat_bubble_outline_rounded,
-                        title: 'Chat',
-                        subtitle: 'Mensajes con el taller',
-                        onTap: () {
-                          // TODO: navegar a chat
-                        },
-                      ),
-                      _ModuleCard(
                         icon: Icons.person_outline_rounded,
                         title: 'Mi Perfil',
                         subtitle: 'Datos de tu cuenta',
                         onTap: () {
-                          // TODO: navegar a perfil
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PerfilScreen(),
+                            ),
+                          );
                         },
                       ),
                     ],
@@ -208,12 +297,14 @@ class _NavBar extends StatelessWidget {
   final String nombreUsuario;
   final String rolUsuario;
   final VoidCallback onLogout;
+  final VoidCallback onProfile;
 
   const _NavBar({
     required this.iniciales,
     required this.nombreUsuario,
     required this.rolUsuario,
     required this.onLogout,
+    required this.onProfile,
   });
 
   @override
@@ -291,6 +382,7 @@ class _NavBar extends StatelessWidget {
               side: const BorderSide(color: AppTheme.border),
             ),
             onSelected: (val) {
+              if (val == 'profile') onProfile();
               if (val == 'logout') onLogout();
             },
             itemBuilder: (_) => [
@@ -502,6 +594,50 @@ class _ModuleCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+class _WsStatusChip extends StatelessWidget {
+  final bool activo;
+
+  const _WsStatusChip({
+    required this.activo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = activo ? AppTheme.success : AppTheme.error;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withOpacity(0.25),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            activo ? Icons.wifi_tethering_rounded : Icons.wifi_off_rounded,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            activo ? 'Tiempo real activo' : 'Tiempo real inactivo',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }

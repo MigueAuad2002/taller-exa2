@@ -15,7 +15,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
 
     #VALIDAR EL TOKEN
     validation = decode_access_token(token)
-    print(f"📊 Resultado del decode: {validation}")
     
     #COMPROBACION DE TOKEN
     if not validation or (isinstance(validation, dict) and validation.get('success') is False):
