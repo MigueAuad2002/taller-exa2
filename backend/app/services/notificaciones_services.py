@@ -68,3 +68,38 @@ async def enviar_push_respuesta_oferta(nro_emergencia: int, id_oferta: int, esta
         notificaciones_repos.guardar_notificacion_db(titulo, cuerpo, tipo_ref, nro_usu, nro_emergencia)
         # 2. Notificar por WebSocket
         await manager.send_personal_message(mensaje_push, nro_usu)
+
+def listar_mis_notificaciones(nro_usuario: int):
+    if not nro_usuario:
+        raise ValueError("No se pudo identificar al usuario de la sesión.")
+    
+    alertas = notificaciones_repos.obtener_notificaciones_por_usuario_db(int(nro_usuario))
+    return {
+        "success": True,
+        "message": "Bandeja de notificaciones recuperada exitosamente.",
+        "data": alertas
+    }
+
+def cambiar_estado_leido(nro_usuario: int, id_notificacion: int = None, marcar_todo: bool = False):
+    if not nro_usuario:
+        raise ValueError("Operación no autorizada. Sesión inválida.")
+        
+    # ESCENARIO A: Botón masivo para limpiar toda la bandeja
+    if marcar_todo:
+        total_actualizadas = notificaciones_repos.marcar_todas_las_notificaciones_leidas_db(int(nro_usuario))
+        return {
+            "success": True,
+            "message": f"Todas las notificaciones fueron marcadas como leídas. ({total_actualizadas} alertas afectadas)"
+        }
+        
+    # ESCENARIO B: Se leyó una notificación específica
+    if id_notificacion:
+        exito = notificaciones_repos.marcar_notificacion_leida_db(int(id_notificacion), int(nro_usuario))
+        if not exito:
+            raise ValueError("No se encontró la notificación seleccionada o no te pertenece.")
+        return {
+            "success": True,
+            "message": "Notificación marcada como leída exitosamente."
+        }
+        
+    raise ValueError("Parámetros insuficientes para procesar la lectura de alertas.")

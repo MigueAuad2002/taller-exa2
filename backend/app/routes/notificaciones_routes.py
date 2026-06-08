@@ -1,7 +1,9 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from app.classes.websocket_manager import manager
 from app.utils.security import decode_access_token
-
+from fastapi import Depends, HTTPException, Body
+from app.utils.security import verificar_token
+from app.services import notificaciones_services
 
 router = APIRouter(tags=["WebSockets Notificaciones"])
 
@@ -50,3 +52,38 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
         if int(nro_usuario) in manager.active_connections:
             del manager.active_connections[int(nro_usuario)]
         print(f"USUARIO {nro_usuario} DESCONECTADO DEL WEBSOCKET.")
+# ============================================================
+# 📡 ENDPOINTS HTTP TRADICIONALES (Bandeja de Entrada e Historial)
+# ============================================================
+
+@router.get('/historial')
+def get_mis_notificaciones(token_data: dict = Depends(verificar_token)):
+    """
+    Endpoint HTTP para poblar la lista/bandeja de entrada del usuario.
+    """
+    nro_usuario = token_data.get('nro_usuario')
+    try:
+        return notificaciones_services.listar_mis_notificaciones(nro_usuario)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put('/leer')
+def update_marcar_como_leido(data: dict = Body(...), token_data: dict = Depends(verificar_token)):
+    """
+    Endpoint flexible para marcar una o todas las notificaciones como leídas.
+    """
+    nro_usuario = token_data.get('nro_usuario')
+    id_notificacion = data.get('id_notificacion')
+    marcar_todo = data.get('marcar_todo', False)
+    
+    try:
+        return notificaciones_services.cambiar_estado_leido(
+            nro_usuario=nro_usuario, 
+            id_notificacion=id_notificacion, 
+            marcar_todo=marcar_todo
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

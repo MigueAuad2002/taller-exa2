@@ -32,7 +32,6 @@ def create_oferta(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-
 #RUTA PUT RESPONDER OFERTA
 @router.put('/{id_oferta}/responder')
 def update_respuesta_oferta(

@@ -1,12 +1,13 @@
+from fastapi import BackgroundTasks
 from app.repos import ofertas_repos, emergencias_repos
 from app.services import notificaciones_services
-from fastapi import BackgroundTasks
 
 #NORMALIZAR ROL
 def normalizar_rol(rol_usuario: str):
     return rol_usuario.strip().upper() if rol_usuario else ""
 
 #FUNCIONES DE LECTURA (GET)
+
 def listar_ofertas_por_emergencia(nro_emergencia: int, token_data: dict):
     #VALIDAMOS QUE LA EMERGENCIA EXISTA
     emergencia = emergencias_repos.obtener_emergencia_por_id(nro_emergencia)
@@ -29,18 +30,23 @@ def listar_mis_ofertas_taller(token_data: dict):
     ofertas = ofertas_repos.obtener_ofertas_por_taller_db(nro_taller)
     return {"success": True, "message": "Ofertas emitidas recuperadas", "data": ofertas}
 
-
-
 #EMITIR OFERTA (SE DISPARA NOTIFICACIÓN AL CLIENTE)
 def emitir_oferta(data: dict, token_data: dict, background_tasks: BackgroundTasks):
     rol = normalizar_rol(token_data.get('nombre_rol'))
+    # ACEPTAMOS ADMINISTRADOR, GERENTE O MECANICO
     if rol not in ['ADMINISTRADOR', 'GERENTE TALLER', 'MECANICO', 'MECÁNICO']:
         raise ValueError("Rol no autorizado para emitir cotizaciones.")
 
     nro_emergencia = data.get('nro_emergencia')
     precio = data.get('precio_estimado')
     tiempo = data.get('tiempo_estimado_minutos')
+    
+    # IMPORTANTE: SI ES ADMINISTRADOR Y NO VIENE EN EL JSON, ESTO SERÁ NONE
     nro_taller = data.get('nro_taller') or token_data.get('nro_taller')
+
+    # VALIDACIÓN EXPLÍCITA PARA EVITAR EL ERROR DE DB
+    if not nro_taller:
+        raise ValueError("No se pudo determinar el taller emisor. Asegúrese de que el usuario tenga un taller asignado o envíe el nro_taller.")
 
     emergencia = emergencias_repos.obtener_emergencia_por_id(nro_emergencia)
     if not emergencia:
@@ -49,9 +55,10 @@ def emitir_oferta(data: dict, token_data: dict, background_tasks: BackgroundTask
     if emergencia['estado'] != 'PENDIENTE':
         raise ValueError("Ya no se aceptan ofertas para esta emergencia.")
 
+    # AHORA ESTAMOS SEGUROS QUE nro_taller TIENE VALOR
     id_oferta = ofertas_repos.crear_oferta_db(precio, tiempo, nro_emergencia, nro_taller)
     
-    #DISPARAR NOTIFICACIÓN AL CLIENTE QUE CREÓ LA EMERGENCIA
+    # DISPARAR NOTIFICACIÓN AL CLIENTE
     nro_usuario_cliente = emergencia['nro_usuario']
     background_tasks.add_task(
         notificaciones_services.enviar_push_nueva_oferta, 
