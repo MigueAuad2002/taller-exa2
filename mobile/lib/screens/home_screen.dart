@@ -13,6 +13,8 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/pending_emergencia_service.dart';
 import '../services/emergencia_service.dart';
+import 'notificaciones_screen.dart';
+import 'cotizaciones_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -144,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
       },
-      onMensaje: (mensaje) {
+     onMensaje: (mensaje) {
         if (!mounted) return;
 
         final titulo = mensaje['titulo']?.toString() ?? 'Notificación';
@@ -155,6 +157,18 @@ class _HomeScreenState extends State<HomeScreen> {
             content: Text('$titulo\n$cuerpo'),
             backgroundColor: AppTheme.primary,
             duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'VER',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const NotificacionesScreen(),
+                  ),
+                );
+              },
+            ),
           ),
         );
       },
@@ -410,22 +424,27 @@ class _HomeScreenState extends State<HomeScreen> {
                         title: 'Cotizaciones',
                         subtitle: 'Ver y aceptar propuestas',
                         onTap: () {
-                          // TODO: navegar a cotizaciones
-                        },
-                      ),
-                      _ModuleCard(
-                        icon: Icons.person_outline_rounded,
-                        title: 'Mi Perfil',
-                        subtitle: 'Datos de tu cuenta',
-                        onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const PerfilScreen(),
+                              builder: (_) => const CotizacionesScreen(),
                             ),
                           );
                         },
                       ),
+                      _ModuleCard(
+                          icon: Icons.notifications_none_rounded,
+                          title: 'Notificaciones',
+                          subtitle: 'Alertas y cotizaciones',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const NotificacionesScreen(),
+                              ),
+                            );
+                          },
+                        ),
                     ],
                   ),
                   const SizedBox(height: 20),

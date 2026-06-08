@@ -14,6 +14,7 @@ import '../services/emergencia_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ev_widgets.dart';
 import 'tracking_emergencia_screen.dart';
+import '../services/oferta_service.dart';
 
 class DetalleEmergenciaScreen extends StatefulWidget {
   final Map<String, dynamic> emergencia;
@@ -50,11 +51,22 @@ class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
         e == 'ASIGNADA' ||
         e == 'EN PROCESO';
   }
+  late Future<List<Map<String, dynamic>>> _futureOfertas;
+
+  bool _respondiendoOferta = false;
+  String? _estadoLocal;
 
   @override
   void initState() {
     super.initState();
+
+    _estadoLocal = widget.emergencia['estado']?.toString();
+
     _futureEvidencias = EmergenciaService().listarEvidenciasEmergencia(
+      nroEmergencia: _nroEmergencia,
+    );
+
+    _futureOfertas = OfertaService().listarOfertasPorEmergencia(
       nroEmergencia: _nroEmergencia,
     );
   }
@@ -63,6 +75,132 @@ class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
   void dispose() {
     _audioRecorder.dispose();
     super.dispose();
+  }
+
+  Future<void> _refrescarOfertas() async {
+  final nuevaCarga = OfertaService().listarOfertasPorEmergencia(
+    nroEmergencia: _nroEmergencia,
+  );
+
+  setState(() {
+    _futureOfertas = nuevaCarga;
+  });
+
+  await nuevaCarga;
+}
+
+Future<void> _responderOferta({
+    required Map<String, dynamic> oferta,
+    required String estadoOferta,
+  }) async {
+    final idOferta = int.parse(oferta['id_oferta'].toString());
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final acepta = estadoOferta == 'ACEPTADA';
+
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          title: Text(
+            acepta ? 'Aceptar cotización' : 'Rechazar cotización',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          content: Text(
+            acepta
+                ? '¿Deseas aceptar esta cotización? Las demás ofertas pendientes serán rechazadas.'
+                : '¿Deseas rechazar esta cotización?',
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppTheme.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: AppTheme.textSecondary),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: acepta ? AppTheme.success : AppTheme.error,
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(
+                acepta ? 'ACEPTAR' : 'RECHAZAR',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmar != true) return;
+
+    setState(() {
+      _respondiendoOferta = true;
+    });
+
+    try {
+      await OfertaService().responderOferta(
+        idOferta: idOferta,
+        estadoOferta: estadoOferta,
+      );
+
+      if (!mounted) return;
+
+      if (estadoOferta == 'ACEPTADA') {
+        setState(() {
+          _estadoLocal = 'ACEPTADO';
+          widget.emergencia['estado'] = 'ACEPTADO';
+          widget.emergencia['nro_taller'] = oferta['nro_taller'];
+        });
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            estadoOferta == 'ACEPTADA'
+                ? 'Cotización aceptada correctamente.'
+                : 'Cotización rechazada correctamente.',
+          ),
+          backgroundColor:
+              estadoOferta == 'ACEPTADA' ? AppTheme.success : AppTheme.error,
+        ),
+      );
+
+      await _refrescarOfertas();
+    } catch (e) {
+      if (!mounted) return;
+
+      _mostrarError(
+        e.toString().replaceAll('Exception: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _respondiendoOferta = false;
+        });
+      }
+    }
   }
 
   Future<void> _refrescarEvidencias() async {
@@ -325,7 +463,7 @@ class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
   Widget build(BuildContext context) {
     final emergencia = widget.emergencia;
 
-    final estado = _texto(emergencia['estado']);
+    final estado = _texto(_estadoLocal ?? emergencia['estado']);
     final latitud = emergencia['latitud'];
     final longitud = emergencia['longitud'];
     final puedeTracking = _puedeVerTracking(estado);
@@ -476,6 +614,71 @@ class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
                   ],
                 ],
               ),
+              const SizedBox(height: 14),
+                _DetalleCard(
+                  title: 'Cotizaciones recibidas',
+                  children: [
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _futureOfertas,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return _CotizacionesEmptyMessage(
+                            icon: Icons.error_outline_rounded,
+                            title: 'No se pudieron cargar las cotizaciones',
+                            subtitle: snapshot.error.toString().replaceAll('Exception: ', ''),
+                          );
+                        }
+
+                        final ofertas = snapshot.data ?? [];
+
+                        if (ofertas.isEmpty) {
+                          return const _CotizacionesEmptyMessage(
+                            icon: Icons.request_quote_outlined,
+                            title: 'Sin cotizaciones recibidas',
+                            subtitle:
+                                'Cuando un taller envíe una oferta, aparecerá en esta sección.',
+                          );
+                        }
+
+                        return Column(
+                          children: List.generate(ofertas.length, (index) {
+                            final oferta = ofertas[index];
+
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                bottom: index == ofertas.length - 1 ? 0 : 12,
+                              ),
+                              child: _OfertaCard(
+                                oferta: oferta,
+                                respondiendo: _respondiendoOferta,
+                                onAceptar: () => _responderOferta(
+                                  oferta: oferta,
+                                  estadoOferta: 'ACEPTADA',
+                                ),
+                                onRechazar: () => _responderOferta(
+                                  oferta: oferta,
+                                  estadoOferta: 'RECHAZADA',
+                                ),
+                              ),
+                            );
+                          }),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               const SizedBox(height: 14),
               _DetalleCard(
                 title: 'Evidencias',
@@ -1108,6 +1311,257 @@ class _MapaDetalle extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class _OfertaCard extends StatelessWidget {
+  final Map<String, dynamic> oferta;
+  final bool respondiendo;
+  final VoidCallback onAceptar;
+  final VoidCallback onRechazar;
+
+  const _OfertaCard({
+    required this.oferta,
+    required this.respondiendo,
+    required this.onAceptar,
+    required this.onRechazar,
+  });
+
+  String _texto(dynamic value) {
+    if (value == null) return 'No disponible';
+    final texto = value.toString().trim();
+    return texto.isEmpty ? 'No disponible' : texto;
+  }
+
+  Color _colorEstado(String estado) {
+    final e = estado.toUpperCase();
+
+    if (e == 'PENDIENTE') return AppTheme.primary;
+    if (e == 'ACEPTADA') return AppTheme.success;
+    if (e == 'RECHAZADA') return AppTheme.error;
+
+    return AppTheme.textSecondary;
+  }
+
+  bool _puedeResponder(String estado) {
+    return estado.toUpperCase() == 'PENDIENTE';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final estado = _texto(oferta['estado_oferta']).toUpperCase();
+    final color = _colorEstado(estado);
+    final puedeResponder = _puedeResponder(estado);
+
+    final precio = _texto(oferta['precio_estimado']);
+    final tiempo = _texto(oferta['tiempo_estimado_minutos']);
+    final taller = _texto(oferta['nombre_taller']);
+    final fecha = _texto(oferta['fecha_oferta']);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: color.withOpacity(puedeResponder ? 0.35 : 0.18),
+          width: puedeResponder ? 1.3 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.request_quote_outlined,
+                  color: color,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      taller.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: AppTheme.textPrimary,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Oferta N° ${_texto(oferta['id_oferta'])}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppTheme.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.09),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: color.withOpacity(0.3),
+                  ),
+                ),
+                child: Text(
+                  estado,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 14),
+          _InfoRow(
+            icon: Icons.payments_outlined,
+            label: 'Precio',
+            value: 'Bs. $precio',
+          ),
+          const SizedBox(height: 8),
+          _InfoRow(
+            icon: Icons.timer_outlined,
+            label: 'Tiempo',
+            value: '$tiempo minutos',
+          ),
+          const SizedBox(height: 8),
+          _InfoRow(
+            icon: Icons.access_time_rounded,
+            label: 'Fecha',
+            value: fecha,
+          ),
+          if (puedeResponder) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: respondiendo ? null : onRechazar,
+                    icon: const Icon(Icons.close_rounded, size: 16),
+                    label: const Text('RECHAZAR'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.error,
+                      side: const BorderSide(
+                        color: AppTheme.error,
+                        width: 1.2,
+                      ),
+                      minimumSize: const Size(0, 42),
+                      textStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: respondiendo ? null : onAceptar,
+                    icon: const Icon(Icons.check_rounded, size: 16),
+                    label: const Text('ACEPTAR'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.success,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 42),
+                      textStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CotizacionesEmptyMessage extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _CotizacionesEmptyMessage({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: AppTheme.textSecondary,
+            size: 24,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
