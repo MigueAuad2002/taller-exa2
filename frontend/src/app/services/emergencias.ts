@@ -73,4 +73,8 @@ export class EmergenciasService {
   eliminarEmergencia(id: number): Observable<any> {
     return this.http.delete<any>(`${this.apiUrl}/api/emergencias/${id}`, { headers: this.getHeaders() });
   }
+  
+  emitirOferta(datos: any): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/api/ofertas/`, datos, { headers: this.getHeaders() });
+  }
 }

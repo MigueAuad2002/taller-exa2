@@ -8,7 +8,7 @@ def obtener_usuario_por_ci(ci: str):
 
         query = f"""
             SELECT a.password_hash,a.nro_usuario,a.ci,b.nombre_completo,b.correo,b.telefono,
-            a.nombre_usuario,c.nombre_rol,a.id_empresa
+            a.nombre_usuario,c.nombre_rol,a.id_empresa,nro_taller
             FROM {Config.SCHEMA}.usuario a
             INNER JOIN taller.persona b ON a.ci = b.ci
             INNER JOIN taller.rol c ON a.nro_rol = c.nro_rol
@@ -28,7 +28,8 @@ def obtener_usuario_por_ci(ci: str):
                 "telefono": resultado[5],
                 "nombre_usuario": resultado[6],
                 "nombre_rol": resultado[7],
-                "id_empresa":resultado[8]
+                "id_empresa":resultado[8],
+                "nro_taller":resultado[9]
             }
             
         return None

@@ -24,7 +24,8 @@ def loguear_usuario(data: dict):
             usuario_db['nombre_usuario'],
             usuario_db["nombre_rol"],
             usuario_db['id_empresa'],
-            usuario_db['nombre_completo']
+            usuario_db['nombre_completo'],
+            usuario_db['nro_taller']
         )
 
         #RETORNAR RESPUESTA JSON DE EXITO
@@ -38,7 +39,8 @@ def loguear_usuario(data: dict):
                 "correo": usuario_db['correo'],
                 "nombre_rol": usuario_db['nombre_rol'],
                 "telefono": usuario_db['telefono'],
-                "id_empresa":usuario_db["id_empresa"]
+                "id_empresa":usuario_db["id_empresa"],
+                "nro_taller":usuario_db["nro_taller"]
             },
             "token":token
         }

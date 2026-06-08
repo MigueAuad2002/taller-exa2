@@ -7,7 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 #INICAR PROTOCOLO DE DETECCION BEARER
 bearer_scheme = HTTPBearer()
 
-def create_access_token(nro_usuario, username, nombre_rol, id_empresa, nombre_completo, minutes=120):
+def create_access_token(nro_usuario, username, nombre_rol, id_empresa, nombre_completo,nro_taller , minutes=120):
     """
     GENERA EL JWT PARA LA SESIÓN DEL USUARIO
     """
@@ -15,7 +15,8 @@ def create_access_token(nro_usuario, username, nombre_rol, id_empresa, nombre_co
         'nro_usuario': nro_usuario,
         'username': username,
         'nombre_rol': nombre_rol,
-        'id_empresa': id_empresa,  # ¡Ahora sí está incluido en el token!
+        'id_empresa': id_empresa,
+        'nro_taller':nro_taller,
         'nombre_completo': nombre_completo,
         'exp': datetime.now(timezone.utc) + timedelta(minutes=minutes),
         'iat': datetime.now(timezone.utc)

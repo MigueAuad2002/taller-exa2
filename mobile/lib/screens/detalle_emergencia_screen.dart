@@ -13,6 +13,7 @@ import 'package:record/record.dart';
 import '../services/emergencia_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ev_widgets.dart';
+import 'tracking_emergencia_screen.dart';
 
 class DetalleEmergenciaScreen extends StatefulWidget {
   final Map<String, dynamic> emergencia;
@@ -38,6 +39,16 @@ class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
 
   int get _nroEmergencia {
     return int.parse(widget.emergencia['nro_emergencia'].toString());
+  }
+
+  bool _puedeVerTracking(String estado) {
+    final e = estado.toUpperCase().replaceAll('_', ' ');
+
+    return e == 'ACEPTADO' ||
+        e == 'ACEPTADA' ||
+        e == 'EN CURSO' ||
+        e == 'ASIGNADA' ||
+        e == 'EN PROCESO';
   }
 
   @override
@@ -317,6 +328,7 @@ class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
     final estado = _texto(emergencia['estado']);
     final latitud = emergencia['latitud'];
     final longitud = emergencia['longitud'];
+    final puedeTracking = _puedeVerTracking(estado);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -338,12 +350,42 @@ class _DetalleEmergenciaScreenState extends State<DetalleEmergenciaScreen> {
           top: 12,
           bottom: MediaQuery.of(context).padding.bottom + 12,
         ),
-        child: EvPrimaryButton(
-          label: _grabandoAudio ? 'Detener Grabación' : 'Agregar Evidencia',
-          loading: _agregando,
-          onPressed: _grabandoAudio
-              ? _detenerGrabacionAudio
-              : _mostrarOpcionesEvidencia,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (puedeTracking) ...[
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => TrackingEmergenciaScreen(
+                        emergencia: emergencia,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.map_outlined, size: 18),
+                label: const Text('VER TRACKING'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            EvPrimaryButton(
+              label: _grabandoAudio ? 'Detener Grabación' : 'Agregar Evidencia',
+              loading: _agregando,
+              onPressed: _grabandoAudio
+                  ? _detenerGrabacionAudio
+                  : _mostrarOpcionesEvidencia,
+            ),
+          ],
         ),
       ),
       body: RefreshIndicator(

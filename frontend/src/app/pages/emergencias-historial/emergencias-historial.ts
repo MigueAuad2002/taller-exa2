@@ -164,20 +164,48 @@ export class EmergenciasHistorialComponent implements OnInit {
     this.procesandoAccion = false;
   }
 
+  // --- REEMPLAZA ESTE MÉTODO EN TU COMPONENTE ---
+  
   enviarCotizacion() {
+    // 1. Validación de seguridad en Frontend
     if (!this.cotizacionForm.precio_estimado || !this.cotizacionForm.tiempo_estimado_minutos) {
       alert('Ingrese todos los datos de la oferta comercial.');
       return;
     }
+    
+    if (!this.emergenciaSeleccionada) {
+      alert('No hay una emergencia seleccionada.');
+      return;
+    }
+
     this.procesandoAccion = true;
     
-    setTimeout(() => {
-      this.ngZone.run(() => {
-        alert(`Oferta registrada: Bs. ${this.cotizacionForm.precio_estimado} en ${this.cotizacionForm.tiempo_estimado_minutos} mins.`);
-        this.cerrarModalCotizacion();
-        this.cargarEmergencias();
-      });
-    }, 1200);
+    // 2. Armar el JSON exacto que espera FastAPI
+    const payloadOferta = {
+      nro_emergencia: this.emergenciaSeleccionada.nro_emergencia,
+      precio_estimado: this.cotizacionForm.precio_estimado,
+      tiempo_estimado_minutos: this.cotizacionForm.tiempo_estimado_minutos
+    };
+
+    // 3. Petición HTTP Real
+    this.emergenciasService.emitirOferta(payloadOferta).subscribe({
+      next: (res) => {
+        this.ngZone.run(() => {
+          if (res.success) {
+            alert('¡Oferta enviada exitosamente al cliente! El cliente recibirá una notificación.');
+            this.cerrarModalCotizacion();
+            this.cargarEmergencias(); // Refrescamos el tablero
+          }
+        });
+      },
+      error: (err) => {
+        this.ngZone.run(() => {
+          alert(err.error?.detail || 'Ocurrió un error al intentar enviar la cotización.');
+          this.procesandoAccion = false;
+          this.cdr.detectChanges();
+        });
+      }
+    });
   }
 
   // --- TRACKING ---
