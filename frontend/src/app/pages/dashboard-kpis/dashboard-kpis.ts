@@ -21,9 +21,7 @@ export class DashboardKpisComponent implements OnInit {
 
   usuarioActual: any = null;
   modoOscuro: boolean = false;
-
   metricas: DashboardMetricas | null = null;
-
   cargando: boolean = false;
   mensajeError: string = '';
 
@@ -36,64 +34,48 @@ export class DashboardKpisComponent implements OnInit {
         return;
       }
 
-      if (localStorage.getItem('tema_sistema') === 'dark') {
-        this.modoOscuro = true;
-        document.documentElement.classList.add('dark');
-      }
-
       this.cargarMetricas();
     }
   }
 
   cargarMetricas(): void {
-    this.cargando = true;
-    this.mensajeError = '';
-    this.metricas = null;
+    // Usamos setTimeout para escapar del ciclo actual y forzar la detección de cambios
+    setTimeout(() => {
+      this.ngZone.run(() => {
+        this.cargando = true;
+        this.mensajeError = '';
+        this.metricas = null;
+        this.cdr.detectChanges(); // Forzamos mostrar el loader
+      });
 
-    this.kpisService.obtenerMetricasDashboard().subscribe({
-      next: (res) => {
-        this.ngZone.run(() => {
-          if (res.success) {
-            this.metricas = res.data;
-          } else {
-            this.mensajeError = res.message || 'No se pudieron cargar los KPIs.';
-          }
+      this.kpisService.obtenerMetricasDashboard().subscribe({
+        next: (res) => {
+          this.ngZone.run(() => {
+            if (res.success) {
+              this.metricas = res.data;
+            } else {
+              this.mensajeError = res.message || 'No se pudieron cargar los KPIs.';
+            }
+            this.finalizarCarga();
+          });
+        },
+        error: (err) => {
+          this.ngZone.run(() => {
+            this.mensajeError = err.error?.detail || 'Error al conectar con el módulo de analítica.';
+            this.finalizarCarga();
+          });
+        }
+      });
+    }, 0);
+  }
 
-          this.cargando = false;
-          this.cdr.detectChanges();
-        });
-      },
-      error: (err) => {
-        this.ngZone.run(() => {
-          this.mensajeError =
-            err.error?.detail ||
-            'Error al conectar con el módulo de analítica y KPIs.';
-
-          this.cargando = false;
-          this.cdr.detectChanges();
-        });
-      }
-    });
+  private finalizarCarga() {
+    this.cargando = false;
+    this.cdr.detectChanges(); // Forzamos quitar el loader y mostrar los datos
   }
 
   refrescarDashboard(): void {
     this.cargarMetricas();
-  }
-
-  alternarModoOscuro(): void {
-    this.modoOscuro = !this.modoOscuro;
-
-    if (this.modoOscuro) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('tema_sistema', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('tema_sistema', 'light');
-    }
-  }
-
-  navegarA(ruta: string): void {
-    this.router.navigate([ruta]);
   }
 
   cerrarSesion(): void {
@@ -101,95 +83,64 @@ export class DashboardKpisComponent implements OnInit {
     this.router.navigate(['/login']);
   }
 
-  getPorcentajeCancelados(): number {
-    if (!this.metricas || this.metricas.total_casos_historicos === 0) {
-      return 0;
-    }
+  // ==============================================================
+  // MATEMÁTICAS PROTEGIDAS CONTRA DATOS NULOS
+  // ==============================================================
 
-    return Number(
-      ((this.metricas.casos_cancelados / this.metricas.total_casos_historicos) * 100).toFixed(2)
-    );
+  getPorcentajeCancelados(): number {
+    const total = this.metricas?.total_casos_historicos || 0;
+    const cancelados = this.metricas?.casos_cancelados || 0;
+    if (total === 0) return 0;
+    return Number(((cancelados / total) * 100).toFixed(2));
   }
 
   getTotalIncidentesPorTipo(): number {
-    if (!this.metricas || !this.metricas.incidentes_por_tipo.length) {
-      return 0;
-    }
-
-    return this.metricas.incidentes_por_tipo.reduce(
-      (total, item) => total + item.cantidad,
-      0
-    );
+    if (!this.metricas?.incidentes_por_tipo?.length) return 0;
+    return this.metricas.incidentes_por_tipo.reduce((total, item) => total + (item?.cantidad || 0), 0);
   }
 
   getMaxIncidentes(): number {
-    if (!this.metricas || !this.metricas.incidentes_por_tipo.length) {
-      return 1;
-    }
-
-    return Math.max(...this.metricas.incidentes_por_tipo.map(item => item.cantidad));
+    if (!this.metricas?.incidentes_por_tipo?.length) return 1;
+    return Math.max(...this.metricas.incidentes_por_tipo.map(item => item?.cantidad || 0));
   }
 
   getAnchoBarraIncidente(cantidad: number): number {
     const maximo = this.getMaxIncidentes();
-
-    if (maximo === 0) {
-      return 0;
-    }
-
+    if (maximo === 0) return 0;
     return Number(((cantidad / maximo) * 100).toFixed(2));
   }
 
   getMaxTiempoTaller(): number {
-    if (!this.metricas || !this.metricas.talleres_eficientes.length) {
-      return 1;
-    }
-
-    return Math.max(...this.metricas.talleres_eficientes.map(item => item.tiempo_promedio_min));
+    if (!this.metricas?.talleres_eficientes?.length) return 1;
+    return Math.max(...this.metricas.talleres_eficientes.map(item => item?.tiempo_promedio_min || 0));
   }
 
   getAnchoBarraTaller(tiempo: number): number {
     const maximo = this.getMaxTiempoTaller();
-
-    if (maximo === 0) {
-      return 0;
-    }
-
+    if (maximo === 0) return 0;
     return Number(((tiempo / maximo) * 100).toFixed(2));
   }
 
   getSlaComoNumero(): number {
-    if (!this.metricas || !this.metricas.nivel_cumplimiento_sla) {
-      return 0;
-    }
-
-    const valor = this.metricas.nivel_cumplimiento_sla.replace('%', '');
-    const numero = Number(valor);
-
+    const sla = this.metricas?.nivel_cumplimiento_sla || '0%';
+    const numero = Number(sla.replace('%', ''));
     return isNaN(numero) ? 0 : numero;
   }
 
-  getTextoTiempo(minutos: number): string {
-    if (!minutos || minutos <= 0) {
-      return '0 min';
-    }
-
-    if (minutos < 60) {
-      return `${minutos} min`;
-    }
-
+  getTextoTiempo(minutos: number | undefined | null): string {
+    if (minutos === undefined || minutos === null || minutos <= 0) return '0 min';
+    if (minutos < 60) return `${minutos} min`;
     const horas = Math.floor(minutos / 60);
-    const minutosRestantes = Math.round(minutos % 60);
-
-    return `${horas} h ${minutosRestantes} min`;
+    const minRestantes = Math.round(minutos % 60);
+    return `${horas} h ${minRestantes} min`;
   }
 
   trackByTipo(index: number, item: any): string {
-    return item.tipo;
+    return item?.tipo || index.toString();
   }
 
   trackByTaller(index: number, item: any): string {
-    return item.taller;
+    return item?.taller || index.toString();
   }
 
   trackByPunto(index: number): number {

@@ -44,6 +44,16 @@ export class AdminLayoutComponent implements OnInit {
   // ---- Definición del menú ----
   menuNavegacion = [
     {
+      titulo: 'Emergencias',
+      icono: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
+      rolesPermitidos: ['ADMINISTRADOR', 'GERENTE TALLER', 'MECANICO'],
+      expandido: true,
+      submenus: [
+        { nombre: 'Visualizar Emergencias', ruta: '/emergencias-historial' },
+        { nombre: 'Mapa de Emergencias',   ruta: '/emergencias-actuales' }
+      ]
+    },
+    {
       titulo: 'Red de Talleres',
       icono: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0zM12 13a3 3 0 100-6 3 3 0 000 6z',
       rolesPermitidos: ['ADMINISTRADOR', 'GERENTE TALLER'],
@@ -64,16 +74,6 @@ export class AdminLayoutComponent implements OnInit {
         { nombre: 'Tenants (Empresas)',  ruta: '/empresas' },
         { nombre: 'Bitácora del Sistema', ruta: '/bitacora' },
         { nombre: 'Copias de Respaldo',  ruta: '/backup' }
-      ]
-    },
-    {
-      titulo: 'Emergencias',
-      icono: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
-      rolesPermitidos: ['ADMINISTRADOR', 'GERENTE TALLER', 'MECANICO'],
-      expandido: true,
-      submenus: [
-        { nombre: 'Emergencias Actuales',   ruta: '/emergencias-actuales' },
-        { nombre: 'Visualizar Emergencias', ruta: '/emergencias-historial' }
       ]
     },
     {

@@ -15,6 +15,7 @@ import { EmergenciasActualesComponent } from './pages/emergencias-actuales/emerg
 import { EmergenciasHistorialComponent } from './pages/emergencias-historial/emergencias-historial';
 import { NotificacionesComponent } from './pages/notificaciones/notificaciones';
 import { DashboardKpisComponent } from './pages/dashboard-kpis/dashboard-kpis';
+import { TrackingComponent } from './pages/tracking/tracking';
 
 //LAYOUTS
 import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout';
@@ -23,6 +24,7 @@ import { AdminLayoutComponent } from './layouts/admin-layout/admin-layout';
 import { publicGuard } from './guards/public-guard';
 import { authGuard } from './guards/auth-guard';
 import { BitacoraComponent } from './pages/bitacora/bitacora';
+
 
 
 
@@ -53,6 +55,7 @@ export const routes: Routes = [
             { path:'talleres/:id/servicios', component:ServiciosTallerComponent },
             { path:'emergencias-actuales',component: EmergenciasActualesComponent },
             { path:'emergencias-historial', component:EmergenciasHistorialComponent },
+            { path:'tracking', component:TrackingComponent },
             { path:'notificaciones', component:NotificacionesComponent },
             { path:'kpis', component:DashboardKpisComponent },
             { path:'bitacora', component:BitacoraComponent }

@@ -96,4 +96,9 @@ export class EmergenciasService {
       { headers: this.getHeaders() }
     );
   }
+
+  // Añade este método en tu EmergenciasService
+  obtenerEmergenciaPorId(id: number): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/api/emergencias/${id}`, { headers: this.getHeaders() });
+  }
 }

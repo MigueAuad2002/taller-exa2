@@ -86,8 +86,19 @@ def actualizar_emergencia(nro_emergencia: int, data: dict, token_data: dict):
 
     if rol == 'ADMINISTRADOR':
         estado = data.get('estado')
-        if not estado: raise ValueError("Admin: solo puede actualizar el 'estado'.")
-        emergencias_repos.actualizar_estado_emergencia_db(nro_emergencia, estado.upper())
+        añadir = data.get('añadir_evidencias',[])
+        if not estado and not añadir: 
+            raise ValueError("Admin: debe actualizar el 'estado' o cargar 'evidencias'.")
+        
+        if estado:
+            emergencias_repos.actualizar_estado_emergencia_db(nro_emergencia, estado.upper())
+            
+        if añadir:
+            for ev in añadir: 
+                tipo = ev.get('tipo_archivo', 'IMAGEN')
+                base64_string = ev.get('base64', '')
+                if base64_string:
+                    emergencias_repos.agregar_evidencia_db(nro_emergencia, tipo.upper(), base64_string)
     
     elif rol in ['MECANICO', 'MECÁNICO', 'TECNICO', 'TÉCNICO']:
         if emergencia['nro_taller'] != nro_taller_token:

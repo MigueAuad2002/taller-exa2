@@ -38,7 +38,7 @@ def crear_usuario_db(datos_persona, datos_usuario):
     db = PostgreSQL()
     db.create_connection()
     try:
-        # Insertar o actualizar los datos personales
+        #INSERTAR DATOS PERSONA
         query_persona = f"""
             INSERT INTO {Config.SCHEMA}.persona (ci, nombre_completo, telefono, correo, direccion)
             VALUES (%s, %s, %s, %s, %s)
@@ -50,7 +50,7 @@ def crear_usuario_db(datos_persona, datos_usuario):
         """
         db.execute_query(query_persona, datos_persona)
 
-        # Insertar Usuario (Si el nombre_usuario está duplicado, Postgres lanzará un error aquí)
+        #INSERTAR DATOS USUARIO
         query_usuario = f"""
             INSERT INTO {Config.SCHEMA}.usuario (nombre_usuario, password_hash, estado, ci, nro_rol, id_empresa)
             VALUES (%s, %s, %s, %s, %s, %s)

@@ -73,34 +73,49 @@ export class EmergenciasActualesComponent implements OnInit, OnDestroy {
     }
   }
 
+  // --- NUEVO MÉTODO PARA EL BOTÓN ACTUALIZAR ---
+  refrescarMapa() {
+    this.cargarEmergenciasPorRol();
+  }
+
   cargarEmergenciasPorRol() {
-    this.cargando = true;
-    const rol = this.usuarioActual.nombre_rol;
+    setTimeout(() => {
+      this.ngZone.run(() => {
+        this.cargando = true;
+        this.cdr.detectChanges(); // Forzar loader
+      });
 
-    let peticion$;
-    if (rol === 'ADMINISTRADOR') {
-      peticion$ = this.emergenciasService.obtenerTodasLasEmergencias();
-    } else if (rol === 'CLIENTE') {
-      peticion$ = this.emergenciasService.obtenerMisEmergencias();
-    } else {
-      peticion$ = this.emergenciasService.obtenerEmergenciasMiTaller();
-    }
-
-    peticion$.subscribe({
-      next: (res) => {
-        if (res.success) {
-          this.emergencias = res.data;
-          this.aplicarFiltros();
-        }
-        this.cargando = false;
-        this.cdr.detectChanges();
-      },
-      error: (err) => {
-        console.error('Error cargando emergencias:', err);
-        this.cargando = false;
-        this.cdr.detectChanges();
+      const rol = this.usuarioActual.nombre_rol;
+      let peticion$;
+      
+      if (rol === 'ADMINISTRADOR') {
+        peticion$ = this.emergenciasService.obtenerTodasLasEmergencias();
+      } else if (rol === 'CLIENTE') {
+        peticion$ = this.emergenciasService.obtenerMisEmergencias();
+      } else {
+        peticion$ = this.emergenciasService.obtenerEmergenciasMiTaller();
       }
-    });
+
+      peticion$.subscribe({
+        next: (res) => {
+          this.ngZone.run(() => {
+            if (res.success) {
+              this.emergencias = res.data;
+              this.aplicarFiltros();
+            }
+            this.cargando = false;
+            this.cdr.detectChanges();
+          });
+        },
+        error: (err) => {
+          this.ngZone.run(() => {
+            console.error('Error cargando emergencias:', err);
+            this.cargando = false;
+            this.cdr.detectChanges();
+          });
+        }
+      });
+    }, 0);
   }
 
   aplicarFiltros() {
@@ -155,7 +170,6 @@ export class EmergenciasActualesComponent implements OnInit, OnDestroy {
 
         this.marcadoresMap.set(emergencia.nro_emergencia, marker);
 
-        // AHORA LEE DIRECTAMENTE EL NOMBRE_USUARIO QUE VIENE DEL BACKEND
         const nombreCliente = emergencia.nombre_usuario ? `👤 ${emergencia.nombre_usuario}` : 'Usuario Anónimo';
         
         const tooltipHtml = `
