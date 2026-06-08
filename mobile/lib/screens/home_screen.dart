@@ -1,3 +1,4 @@
+//home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
@@ -164,7 +165,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         icon: Icons.request_quote_outlined,
                         title: 'Cotizaciones',
                         subtitle: 'Ver y aceptar propuestas',
-                        badge: '2', // TODO: cargar desde API
                         onTap: () {
                           // TODO: navegar a cotizaciones
                         },
@@ -228,52 +228,58 @@ class _NavBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Logo
-          const Icon(Icons.flash_on_rounded, color: Colors.white, size: 18),
-          const SizedBox(width: 6),
+          // Logo — solo ícono + "EV" para no desbordar en móvil
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(Icons.flash_on_rounded, color: Colors.white, size: 16),
+          ),
+          const SizedBox(width: 8),
           const Text(
             'EMERGENCIAS',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w900,
-              letterSpacing: 0.3,
-            ),
-          ),
-          const Text(
-            'VEHICULARES',
-            style: TextStyle(
-              color: Color(0xFF8FA8E8),
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              letterSpacing: 0.3,
+              letterSpacing: 0.2,
             ),
           ),
 
           const Spacer(),
 
-          // Info usuario
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                nombreUsuario.isNotEmpty ? nombreUsuario.toUpperCase() : '...',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
+          // Info usuario — Flexible para truncar si el nombre es largo
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  nombreUsuario.isNotEmpty ? nombreUsuario.toUpperCase() : '...',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
-              ),
-              Text(
-                rolUsuario.toUpperCase(),
-                style: const TextStyle(
-                  color: Color(0xFF8FA8E8),
-                  fontSize: 9,
-                  letterSpacing: 0.5,
+                Text(
+                  rolUsuario.toUpperCase(),
+                  style: const TextStyle(
+                    color: Color(0xFF8FA8E8),
+                    fontSize: 9,
+                    letterSpacing: 0.4,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(width: 10),
 
@@ -365,7 +371,7 @@ class _SosButton extends StatelessWidget {
                   color: Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Icon(Icons.warning_amber_rounded,
+                child: const Icon(Icons.directions_car_rounded,
                     color: Colors.white, size: 26),
               ),
               const SizedBox(width: 16),

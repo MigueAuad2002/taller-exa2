@@ -1,7 +1,9 @@
+//solicitar_emergencia_screen.dart
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ev_widgets.dart';
+import '../services/emergencia_service.dart';
 
 // Tipos de emergencia disponibles
 const _tiposEmergencia = [
@@ -50,6 +52,7 @@ class _SolicitarEmergenciaScreenState
   final _formKey = GlobalKey<FormState>();
   final _descripcionController = TextEditingController();
   final _referenciaController = TextEditingController();
+  final _evidenciaController = TextEditingController();
 
   String? _tipoSeleccionado;
   Position? _posicion;
@@ -70,6 +73,7 @@ class _SolicitarEmergenciaScreenState
   void dispose() {
     _descripcionController.dispose();
     _referenciaController.dispose();
+    _evidenciaController.dispose();
     super.dispose();
   }
 
@@ -125,19 +129,20 @@ class _SolicitarEmergenciaScreenState
     setState(() => _enviando = true);
 
     try {
-      // TODO: llamar al endpoint
-      // await EmergenciaService().solicitarEmergencia(
-      //   tipo: _tipoSeleccionado!,
-      //   descripcion: _descripcionController.text.trim(),
-      //   referencia: _referenciaController.text.trim(),
-      //   latitud: _posicion!.latitude,
-      //   longitud: _posicion!.longitude,
-      // );
+      final evidencia = _evidenciaController.text.trim();
 
-      await Future.delayed(const Duration(seconds: 2)); // simulado
+      final resultado = await EmergenciaService().crearEmergencia(
+        tipoEmergencia: _tipoSeleccionado!,
+        latitud: _posicion!.latitude,
+        longitud: _posicion!.longitude,
+        prioridad: 'MEDIA',
+        descripcion: _descripcionController.text.trim(),
+        referencia: _referenciaController.text.trim(),
+        evidencias: [evidencia],
+      );
 
       if (!mounted) return;
-      _mostrarExito();
+      _mostrarExito(resultado['nro_emergencia']);
     } catch (e) {
       if (!mounted) return;
       _mostrarError(e.toString().replaceAll('Exception: ', ''));
@@ -153,7 +158,7 @@ class _SolicitarEmergenciaScreenState
     ));
   }
 
-  void _mostrarExito() {
+  void _mostrarExito(dynamic nroEmergencia) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -184,10 +189,10 @@ class _SolicitarEmergenciaScreenState
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Los talleres cercanos recibirán tu solicitud. Te notificaremos cuando haya una cotización.',
+            Text(
+              'Solicitud N° $nroEmergencia registrada correctamente.',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
                 color: AppTheme.textSecondary,
                 height: 1.5,
@@ -269,6 +274,7 @@ class _SolicitarEmergenciaScreenState
                       activo: _pasoActual == 2,
                       descripcionController: _descripcionController,
                       referenciaController: _referenciaController,
+                      evidenciaController: _evidenciaController,
                     ),
                   ],
                 ),
@@ -623,11 +629,13 @@ class _PasoDetalles extends StatelessWidget {
   final bool activo;
   final TextEditingController descripcionController;
   final TextEditingController referenciaController;
+  final TextEditingController evidenciaController;
 
   const _PasoDetalles({
     required this.activo,
     required this.descripcionController,
     required this.referenciaController,
+    required this.evidenciaController,
   });
 
   @override
@@ -654,21 +662,74 @@ class _PasoDetalles extends StatelessWidget {
               return null;
             },
           ),
+
           const SizedBox(height: 16),
+
           EvTextField(
             label: 'REFERENCIA DE UBICACIÓN (opcional)',
             hint: 'Ej: Frente al mercado, esquina con Av. Montes...',
             controller: referenciaController,
           ),
+
           const SizedBox(height: 8),
+
           const Row(
             children: [
-              Icon(Icons.info_outline_rounded,
-                  size: 13, color: AppTheme.textSecondary),
+              Icon(
+                Icons.info_outline_rounded,
+                size: 13,
+                color: AppTheme.textSecondary,
+              ),
               SizedBox(width: 6),
               Expanded(
                 child: Text(
                   'La referencia ayuda al mecánico a encontrarte más rápido.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          EvTextField(
+            label: 'URL DE EVIDENCIA',
+            hint: 'Ej: https://midominio.com/evidencia.jpg',
+            controller: evidenciaController,
+            keyboardType: TextInputType.url,
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) {
+                return 'El backend exige al menos una evidencia';
+              }
+
+              final texto = v.trim();
+
+              if (!texto.startsWith('http://') &&
+                  !texto.startsWith('https://')) {
+                return 'Ingrese una URL válida';
+              }
+
+              return null;
+            },
+          ),
+
+          const SizedBox(height: 8),
+
+          const Row(
+            children: [
+              Icon(
+                Icons.link_rounded,
+                size: 13,
+                color: AppTheme.textSecondary,
+              ),
+              SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Por ahora el backend recibe evidencias como URLs. Luego se puede agregar subida de imágenes.',
                   style: TextStyle(
                     fontSize: 11,
                     color: AppTheme.textSecondary,

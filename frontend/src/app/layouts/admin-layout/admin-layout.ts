@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, PLATFORM_ID } from '@angular/core';
+import { Component, OnInit, inject, PLATFORM_ID, HostListener } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Router, RouterOutlet, RouterModule } from '@angular/router';
 import { AuthService } from '../../services/auth';
@@ -17,9 +17,8 @@ export class AdminLayoutComponent implements OnInit {
   usuarioActual: any = null;
   modoOscuro: boolean = false;
   
-  // Variables para controlar la visibilidad del menú
-  sidebarAbierto: boolean = false; // Controla el deslizamiento en móviles
-  sidebarColapsado: boolean = false; // Controla la reducción a íconos en escritorio
+  sidebarAbierto: boolean = false; 
+  sidebarColapsado: boolean = false; 
 
   menuNavegacion = [
     {
@@ -75,19 +74,34 @@ export class AdminLayoutComponent implements OnInit {
         this.modoOscuro = true;
         document.documentElement.classList.add('dark');
       }
+
+      this.verificarResolucion(); // Corregir estado inicial según la pantalla
     }
   }
 
-  // BOTÓN PRINCIPAL (Controla el Menú en todas las pantallas)
+  // Detecta si la ventana cambia de tamaño
+  @HostListener('window:resize')
+  onResize() {
+    if (isPlatformBrowser(this.platformId)) {
+      this.verificarResolucion();
+    }
+  }
+
+  verificarResolucion() {
+    const isDesktop = window.innerWidth >= 768;
+    if (isDesktop && this.sidebarAbierto) {
+      this.sidebarAbierto = false; // Cierra el modo móvil si agranda la pantalla
+    }
+  }
+
   toggleSidebar() {
     if (isPlatformBrowser(this.platformId)) {
       if (window.innerWidth < 768) {
-        // En móviles, se desliza desde la izquierda
+        // Móvil: desliza
         this.sidebarAbierto = !this.sidebarAbierto;
       } else {
-        // En escritorio, se encoge dejando solo los íconos
+        // PC: Colapsa
         this.sidebarColapsado = !this.sidebarColapsado;
-        // Si lo encogemos, cerramos todos los acordeones para mantener el diseño limpio
         if (this.sidebarColapsado) {
           this.menuFiltrado.forEach(m => m.expandido = false);
         }
@@ -95,16 +109,13 @@ export class AdminLayoutComponent implements OnInit {
     }
   }
 
-  // ACORDEÓN DE MÓDULOS
   toggleAcordeon(modulo: any) {
-    // Si el usuario hace clic en un ícono cuando el menú está encogido, lo expandimos automáticamente
-    if (this.sidebarColapsado) {
+    if (this.sidebarColapsado && window.innerWidth >= 768) {
       this.sidebarColapsado = false;
     }
     modulo.expandido = !modulo.expandido;
   }
 
-  // CIERRA EL MENÚ EN MÓVILES AL HACER CLIC AFUERA
   cerrarSidebarMobile() {
     this.sidebarAbierto = false;
   }
