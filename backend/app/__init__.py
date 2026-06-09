@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import Config
-from app.routes import main_routes,auth_routes, users_routes, tenant_routes, roles_routes, backup_routes,profile_routes, vehiculos_routes, talleres_routes, emergencias_routes, notificaciones_routes, tarifas_routes, cobros_routes, diagnostico_routes
+from app.routes import main_routes,auth_routes, users_routes, tenant_routes, roles_routes, backup_routes,profile_routes, vehiculos_routes, talleres_routes, emergencias_routes, notificaciones_routes, tarifas_routes, cobros_routes, diagnostico_routes, kpis_routes
 
 
 
@@ -36,4 +36,5 @@ def create_app() -> FastAPI:
     app.include_router(tarifas_routes.router,prefix='/api/tarifas')
     app.include_router(cobros_routes.router,prefix='/api/cobros')
     app.include_router(diagnostico_routes.router) 
+    app.include_router(kpis_routes.router)
     return app
